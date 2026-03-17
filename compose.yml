@@ -1,0 +1,30 @@
+services:
+  auth:
+    build: ./auth
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/auth
+
+
+  db-service:
+    build: ./db-service
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/db-service
+  db:
+    image: postgres:18
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=taglydb
+      - POSTGRES_USER=tagly
+      - POSTGRES_PASSWORD=tagly
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - .:/app
+  #   command: npm start
