@@ -1,9 +1,19 @@
-from asyncpg import connect
-from models import User, Role
+import logging
+import fastapi
+from RedisService import RedisService
 
-class DBService:
-    def __init__(self, db_url: str):
-        self.db_url = db_url
+logger = logging.getLogger(__name__)
 
-    async def get_db(self):
-        return await asyncpg.connect(self.db_url)
+app = fastapi.FastAPI()
+redis_service = RedisService()
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
+
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down DBService...")
+    await redis_service.close()

@@ -1,30 +1,53 @@
 services:
-  auth:
-    build: ./auth
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/auth
-
-
-  db-service:
-    build: ./db-service
-    ports:
-      - "8001:8001"
-    volumes:
-      - .:/db-service
   db:
     image: postgres:18
+    container_name: tagly-db
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=taglydb
-      - POSTGRES_USER=tagly
-      - POSTGRES_PASSWORD=tagly
-  # frontend:
-  #   build: ./frontend
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - .:/app
-  #   command: npm start
+      - POSTGRES_DB=${DB_NAME:-taglydb}
+      - POSTGRES_USER=${DB_USER:-tagly}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tagly"]
+      interval: 10s
+
+  redis:
+    image: redis:7
+    container_name: tagly-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build: ./auth
+    container_name: tagly-auth
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./auth:/auth
+    depends_on:
+      db-service:
+        condition: service_healthy
+
+  db-service:
+    build: ./DBService
+    container_name: tagly-db-service
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./DBService:/db-service
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

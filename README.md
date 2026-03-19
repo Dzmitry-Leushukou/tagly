@@ -21,3 +21,25 @@ DBService is service for database of project. It`s connect to Postgre database a
 
 
 ### Frontend
+
+## Data models
+
+### PostgreSQL
+#### User
+- id
+- login
+- hashed_password
+- description
+- roleId
+- interestId
+#### Relo
+- id
+- name
+- canDeletePost
+- canDeleteUser
+
+### Redis
+
+#### User
+
+- String: cache:{user_id}:{user_data}
