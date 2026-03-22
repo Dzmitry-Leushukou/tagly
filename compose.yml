@@ -5,11 +5,11 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${DB_NAME:-taglydb}
-      - POSTGRES_USER=${DB_USER:-tagly}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=taglydb
+      - POSTGRES_USER=tagly
+      - POSTGRES_PASSWORD=tagly
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tagly"]
       interval: 10s
@@ -26,7 +26,9 @@ services:
       retries: 5
 
   auth:
-    build: ./auth
+    build:
+      context: . 
+      dockerfile: auth/Dockerfile
     container_name: tagly-auth
     ports:
       - "8000:8000"

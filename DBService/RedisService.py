@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 class RedisService:
     def __init__(self):
         self.host = os.getenv('REDIS_HOST')
-        self.port = int(os.getenv('REDIS_PORT'))
-        self.db = int(os.getenv('REDIS_DB'))
+        self.port = int(os.getenv('REDIS_PORT', '6379'))
+        self.db = int(os.getenv('REDIS_DB','0'))
         self.redis_pool = None
         self.redis = None
         try:
