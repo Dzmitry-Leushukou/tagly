@@ -1,5 +1,7 @@
 from passlib.context import CryptContext
 from auth.JWTService import JWTService
+from tagly-utils as utils
+
 
 class AuthService:
     def __init__(self):
@@ -7,8 +9,7 @@ class AuthService:
         self.jwt_service = JWTService()
 
     async def get_auth(self, login:str, plain_password:str):
-        # data = await self.DBService.get_auth_data(login)
-        data = None
+        user = await utils.call_DBService("get_user", login)
         if not data :
             return {"status": "Wrong login or password"}
         
@@ -28,3 +29,5 @@ class AuthService:
             return "Success"
         else:
             return "Failed"
+        
+    

@@ -27,20 +27,20 @@ services:
       timeout: 5s
       retries: 5
 
-  auth:
-    build:
-      context: . 
-      dockerfile: auth/Dockerfile
-    container_name: tagly-auth
-    env_file:
-      - ./auth/.env
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./auth:/auth
-    depends_on:
-      db-service:
-        condition: service_healthy
+  # auth:
+  #   build:
+  #     context: . 
+  #     dockerfile: auth/Dockerfile
+  #   container_name: tagly-auth
+  #   env_file:
+  #     - ./auth/.env
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - ./auth:/auth
+  #   depends_on:
+  #     db-service:
+  #       condition: service_healthy
 
   db-service:
     build: ./DBService

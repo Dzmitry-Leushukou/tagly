@@ -1,6 +1,7 @@
-import redis 
+import redis
 import os
 import logging
+import json
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class RedisService:
         except Exception as e:
             logger.error("Failed to connect to Redis: %s", str(e))
             raise
-        
+
     def close(self):
         try:
             self.redis_pool.disconnect()
@@ -34,3 +35,9 @@ class RedisService:
         except Exception as e:
             logger.error("Failed to close Redis connection pool: %s", str(e))
 
+    def set(self, key, value):
+        self.redis.set(key, json.dumps(value))
+
+    def get(self, key):
+        value = self.redis.get(key)
+        return json.loads(value) if value else None

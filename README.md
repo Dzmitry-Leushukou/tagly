@@ -22,6 +22,54 @@ DBService is service for database of project. It`s connect to Postgre database a
 
 ### Frontend
 
+## Endpoints
+
+### Auth service
+Base url: ```localhost:8000```
+#### /auth
+Base url: ```localhost:8000/auth```
+
+Method: ```GET```
+
+Params:
+- login
+- plain_password
+
+Return:
+- jwt_token
+
+#### /refresh
+Base url: ```localhost:8000/refresh```
+
+Method: ```GET```
+
+Params:
+- jwt_token
+
+
+Return:
+- jwt_token
+
+#### /logout
+Base url: ```localhost:8000/logout```
+
+Method: ```GET```
+
+Params:
+- jwt_token
+
+#### /register
+Base url: ```localhost:8000/register```
+
+Method: ```GET```
+
+Params:
+- login
+- plain_password
+
+Return:
+- jwt_token
+
 ## Data models
 
 ### PostgreSQL

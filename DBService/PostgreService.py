@@ -33,6 +33,11 @@ class PostgreService:
             conn = self.pool.getconn()
             self.pool.putconn(conn)
             logger.info("Connected to PostgreSQL successfully!")
+            
+            self.init_tables()
+            
+            logger.info("PostgreService initialized successfully")
+
         except Exception as e:
             logger.error("Failed to connect to PostgreService: %s", str(e))
             raise
@@ -50,7 +55,7 @@ class PostgreService:
     @contextmanager
     def get_cursor(self, commit_on_exit=False):
         with self.get_connection() as conn:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             try:
                 yield cursor
                 if commit_on_exit:
@@ -74,3 +79,40 @@ class PostgreService:
         if self.pool:
             self.pool.closeall()
             logger.info("PostgreSQL connection pool closed")
+
+
+    def get_user(self,user_id):
+        result = None
+        try:
+            result = self.execute_query("SELECT * FROM users WHERE id = %s LIMIT 1",
+                                        (user_id,),
+                                        fetch_one=True)
+            
+            return result
+        except Exception as e:
+            logger.info(f"User {user_id} not found: {e}")
+            return None
+    
+    def init_tables(self):
+        logger.info("Checking if users table exists...")
+        try:
+            result = self.execute_query("SELECT 1 FROM users LIMIT 1", fetch_one=True)
+            logger.info("Table 'users' already exists")
+        except Exception as e:
+            logger.info(f"Table 'users' does not exist, creating... (error: {e})")
+            try:
+                self.execute_query("""
+                    CREATE TABLE users (
+                        id INT PRIMARY KEY,
+                        login VARCHAR(255),
+                        hashed_password VARCHAR(255),
+                        description VARCHAR(255)
+                    )
+                """, commit=True)
+                logger.info("Table 'users' created successfully")
+            except Exception as e:
+                logger.error(f"Error creating table 'users': {e}")
+                raise
+
+        logger.info("All tables initialized")
+  
