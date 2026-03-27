@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from auth.AuthService import AuthService
-from tagly-utils as utils
 
 app = FastAPI(title="Auth service")
 auth_service = AuthService()
@@ -20,7 +19,7 @@ async def get_refresh():
 
 @app.get("/logout")
 async def get_logout():
-    utils.call_DBService("","/user/1","GET")
+
     return {"auth": "auth"}
 
 @app.get("/register")

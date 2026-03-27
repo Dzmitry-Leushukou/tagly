@@ -24,20 +24,34 @@ async def shutdown_event():
     postgres_service.close()
 
 
-@app.get("/user/{user_id}")
-def read_user(user_id: int):
-    user = redis_service.get(user_id)
+@app.get("/user/{login}")
+def get_user(login: str):
+    user = redis_service.get(login)
     if user is None:
-        user = postgres_service.get_user(user_id)
+        user = postgres_service.get_user(login)
         if user is not None:
-            redis_service.set(user_id, user)
-            logger.info(f"User {user_id} retrieved from DB and cached")
+            redis_service.set(login, user)
+            logger.info(f"User {login} retrieved from DB and cached")
         else:
-            logger.info(f"User {user_id} not found in DB")
+            logger.info(f"User {login} not found in DB")
     else:
-        logger.info(f"User {user_id} retrieved from cache")
+        logger.info(f"User {login} retrieved from cache")
 
     if user is None:
         raise fastapi.HTTPException(status_code=404, detail="User not found")
 
     return user
+
+
+
+@app.post("/user")
+def create_user(login:str, hashed_password:str, description:str=None):
+    try:
+        if description is None:
+            description = ""
+        user_id = postgres_service.create_user(login=login, hashed_password=hashed_password, description=description)
+        return user_id
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        raise fastapi.HTTPException(status_code=404, detail="Internal server error")
+    

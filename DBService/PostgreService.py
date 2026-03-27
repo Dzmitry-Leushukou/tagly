@@ -81,16 +81,16 @@ class PostgreService:
             logger.info("PostgreSQL connection pool closed")
 
 
-    def get_user(self,user_id):
+    def get_user(self,login):
         result = None
         try:
-            result = self.execute_query("SELECT * FROM users WHERE id = %s LIMIT 1",
-                                        (user_id,),
+            result = self.execute_query("SELECT * FROM users WHERE login = %s LIMIT 1",
+                                        (login,),
                                         fetch_one=True)
             
             return result
         except Exception as e:
-            logger.info(f"User {user_id} not found: {e}")
+            logger.info(f"User {login} not found: {e}")
             return None
     
     def init_tables(self):
@@ -103,8 +103,7 @@ class PostgreService:
             try:
                 self.execute_query("""
                     CREATE TABLE users (
-                        id INT PRIMARY KEY,
-                        login VARCHAR(255),
+                        login VARCHAR(255) UNIQUE PRIMARY KEY,
                         hashed_password VARCHAR(255),
                         description VARCHAR(255)
                     )
@@ -116,3 +115,18 @@ class PostgreService:
 
         logger.info("All tables initialized")
   
+
+    def create_user(self, login, hashed_password, description):
+        try:
+            logger.info(f"Creating user with login = {login}")
+            if self.get_user(login) is not None:
+                raise Exception(f"User with login {login} already exists")
+            self.execute_query("""
+                INSERT INTO users (login, hashed_password, description)
+                VALUES (%s, %s, %s)
+            """, (login, hashed_password, description), commit=True)
+            logger.info(f"User {login} created successfully")
+            return login
+        except Exception as e:
+            logger.error(f"Error creating user with login = {login}: {e}")
+            raise

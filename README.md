@@ -74,12 +74,11 @@ Return:
 
 ### PostgreSQL
 #### User
-- id
-- login
+- login (unique)
 - hashed_password
 - description
-- roleId
-- interestId
+- roleId (FK)
+- interestId (FK)
 #### Relo
 - id
 - name
