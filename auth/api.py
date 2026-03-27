@@ -1,26 +1,17 @@
 from fastapi import FastAPI
-from AuthService import AuthService
+from auth.AuthService import AuthService
 
 
 app = FastAPI(title="Auth service")
-auth_serivce=AuthService()
+auth_service = AuthService()
 
 @app.get("/")
 async def read_root():
-    return {"Status": "Auth serivce alive!"}
+    return {"Status": "Auth service alive!"}
 
 @app.get("/auth")
 async def get_auth(login:str, plain_password:str):
-    status = await auth_serivce.try_auth(login, plain_password)
-    if status=="Success":
-        jwt_token=generate_jwt_token()
-        return {
-            "status": status,
-            "jwt_token": jwt_token
-            }
-    return {
-            "status": status
-            }
+    return await auth_service.get_auth(login, plain_password)
 
 @app.get("/refresh")
 async def get_refresh():
@@ -30,4 +21,3 @@ async def get_refresh():
 @app.get("/logout")
 async def get_logout():
     return {"auth": "auth"}
-

@@ -16,4 +16,4 @@ def read_root():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Shutting down DBService...")
-    await redis_service.close()
+    redis_service.close()
