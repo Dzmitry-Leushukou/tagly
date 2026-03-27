@@ -70,6 +70,32 @@ Base url: `localhost:8000`
 **Error responses:**
 - `401` — User already exists / Registration failed
 
+#### `/refresh`
+**URL:** `localhost:8000/refresh`
+
+**Method:** `POST`
+
+**Description:** Refresh access token using refresh token. Use when access_token expires (30 min).
+
+**Request body:**
+```json
+{
+  "refresh_token": "jwt_token"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "Success",
+  "access_token": "jwt_token",
+  "refresh_token": "jwt_token"
+}
+```
+
+**Error responses:**
+- `401` — Invalid or expired refresh token
+
 ### DBService
 Base url: `localhost:8001`
 

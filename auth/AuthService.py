@@ -40,3 +40,18 @@ class AuthService:
                 await response.json()
 
             return {"status": "Success"}
+        
+
+    async def refresh(self, refresh_token: str) -> dict:
+        payload = self.jwt_service.verify_token(refresh_token)
+        if not payload:
+            return {"status": "Invalid or expired refresh token"}
+        
+        access_token = self.jwt_service.create_access_token(payload)
+        refresh_token = self.jwt_service.create_refresh_token(payload)
+        
+        return {
+            "status": "Success",
+            "access_token": access_token,
+            "refresh_token": refresh_token
+    }

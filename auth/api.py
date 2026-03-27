@@ -17,6 +17,9 @@ class AuthResponse(BaseModel):
     refresh_token: str | None = None
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
 @app.get("/")
 async def read_root():
     return {"Status": "Auth service alive!"}
@@ -32,6 +35,13 @@ async def get_auth(request: AuthRequest):
 @app.post("/register")
 async def register(request: AuthRequest):
     result = await auth_service.register(request.login, request.password)
+    if result["status"] != "Success":
+        raise HTTPException(status_code=401, detail=result["status"])
+    return result
+
+@app.post("/refresh", response_model=AuthResponse)
+async def refresh_token(request: RefreshRequest):
+    result = await auth_service.refresh(request.refresh_token)
     if result["status"] != "Success":
         raise HTTPException(status_code=401, detail=result["status"])
     return result
