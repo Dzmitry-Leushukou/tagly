@@ -13,14 +13,20 @@ class JWTService:
         if not self.SECRET_KEY:
             raise ValueError("SECRET_KEY is not set")
 
-    async def create_token(self, data: dict, expires_delta: timedelta) -> str:
+    def create_token(self, data: dict, expires_delta: timedelta) -> str:
         to_encode = data.copy()
         expire = datetime.now(timezone.utc) + expires_delta
         to_encode.update({"exp": expire})
         return jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
 
-    async def create_access_token(self, data: dict) -> str:
-        return await self.create_token(data, timedelta(minutes=self.ACCESS_TOKEN_EXPIRE_MINUTES))
+    def create_access_token(self, data: dict) -> str:
+        return self.create_token(data, timedelta(minutes=self.ACCESS_TOKEN_EXPIRE_MINUTES))
 
-    async def create_refresh_token(self, data: dict) -> str:
-        return await self.create_token(data, timedelta(days=self.REFRESH_TOKEN_EXPIRE_DAYS))
+    def create_refresh_token(self, data: dict) -> str:
+        return self.create_token(data, timedelta(days=self.REFRESH_TOKEN_EXPIRE_DAYS))
+
+    def verify_token(self, token: str) -> dict | None:
+        try:
+            return jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+        except (jwt.ExpiredSignatureError, jwt.JWTError):
+            return None

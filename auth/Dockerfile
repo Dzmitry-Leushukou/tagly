@@ -2,12 +2,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY utils /app/utils
-COPY auth /app/auth
+COPY requirements.txt .
 
-RUN pip install -e /app/utils
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY auth/requirements.txt /app/auth/requirements.txt
-RUN pip install --no-cache-dir -r /app/auth/requirements.txt
+COPY  . .
 
-CMD ["uvicorn", "auth.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD [ "python", "main.py" ]

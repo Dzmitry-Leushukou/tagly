@@ -1,33 +1,33 @@
 from passlib.context import CryptContext
-from auth.JWTService import JWTService
-from tagly-utils as utils
+from JWTService import JWTService
+import os
+import aiohttp
 
 
 class AuthService:
     def __init__(self):
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self.jwt_service = JWTService()
+        self.db_service_url = os.getenv("DB_SERVICE_URL")
 
-    async def get_auth(self, login:str, plain_password:str):
-        user = await utils.call_DBService("get_user", login)
-        if not data :
-            return {"status": "Wrong login or password"}
-        
-        status = await self.check_password(plain_password, data["hashed_password"])
-
-        if status == "Success":
+    async def get_auth(self, login: str, plain_password: str) -> dict:
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(f"{self.db_service_url}/user/{login}")
+            if response.status != 200:
+                return {"status": "Wrong login or password"}
+            user = await response.json()
+            
+            if not self.pwd_context.verify(plain_password, user["hashed_password"]):
+                return {"status": "Wrong login or password"}
+            
+            access_token = self.jwt_service.create_access_token(user)
+            refresh_token = self.jwt_service.create_refresh_token(user)
+            
             return {
-                    "status": "Success",
-                    "token": await self.jwt_service.create_access_token(data)
-                }
-        else:
-            return {"status": "Wrong login or password"}
-
-
-    async def check_password(self, plain_password:str, hashed_password:str):
-        if self.pwd_context.verify(plain_password, hashed_password):
-            return "Success"
-        else:
-            return "Failed"
+                "status": "Success",
+                "access_token": access_token,
+                "refresh_token": refresh_token
+            }
+   
         
     

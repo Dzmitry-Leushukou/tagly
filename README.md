@@ -70,9 +70,31 @@ Params:
 Return:
 - jwt_token
 
+### DBService
+Base url: ```localhost:8001/```
+
+#### /user
+Base url: ```localhost:8001/user```
+
+Method: ```GET```
+
+Params:
+- jwt_token
+
+Return:
+- user_data
+
+#### /user
+Base url: ```localhost:8001/user```
+
+Method: ```POST```
+
+Params:
+- jwt_token
+- user_data
+
 ## Data models
 
-### PostgreSQL
 #### User
 - login (unique)
 - hashed_password
