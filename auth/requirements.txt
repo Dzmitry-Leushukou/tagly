@@ -1,0 +1,6 @@
+uvicorn
+fastapi
+passlib[bcrypt]
+python-jose[cryptography]
+aiohttp
+bcrypt==4.0.1

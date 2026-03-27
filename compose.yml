@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:17
+    container_name: tagly-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=taglydb
+      - POSTGRES_USER=tagly
+      - POSTGRES_PASSWORD=tagly
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tagly -d taglydb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: tagly-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build: ./auth
+    env_file:
+      - ./auth/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./auth:/auth
+    depends_on:
+      db-service:
+        condition: service_healthy
+
+  db-service:
+    build: ./DBService
+    container_name: tagly-db-service
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./DBService:/db-service
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: taglydb
+      DB_USER: tagly
+      DB_PASSWORD: tagly
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/', timeout=2)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
