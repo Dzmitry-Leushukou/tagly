@@ -1,5 +1,6 @@
 import logging
 import fastapi
+from pydantic import BaseModel
 from RedisService import RedisService
 from PostgreService import PostgreService
 
@@ -44,14 +45,22 @@ def get_user(login: str):
 
 
 
+class CreateUserRequest(BaseModel):
+    login: str
+    hashed_password: str
+    description: str | None = None
+
+
 @app.post("/user")
-def create_user(login:str, hashed_password:str, description:str=None):
+def create_user(request: CreateUserRequest):
     try:
-        if description is None:
-            description = ""
-        user_id = postgres_service.create_user(login=login, hashed_password=hashed_password, description=description)
+        if request.description is None:
+            request.description = ""
+        user_id = postgres_service.create_user(login=request.login, hashed_password=request.hashed_password, description=request.description)
         return user_id
     except Exception as e:
         logger.error(f"Error creating user: {e}")
-        raise fastapi.HTTPException(status_code=404, detail="Internal server error")
+        if "duplicate key" in str(e).lower() or "already exists" in str(e).lower():
+            raise fastapi.HTTPException(status_code=409, detail="User already exists")
+        raise fastapi.HTTPException(status_code=500, detail="Internal server error")
     

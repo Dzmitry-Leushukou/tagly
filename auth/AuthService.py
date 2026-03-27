@@ -12,22 +12,31 @@ class AuthService:
 
     async def get_auth(self, login: str, plain_password: str) -> dict:
         async with aiohttp.ClientSession() as session:
-            response = await session.get(f"{self.db_service_url}/user/{login}")
-            if response.status != 200:
-                return {"status": "Wrong login or password"}
-            user = await response.json()
-            
-            if not self.pwd_context.verify(plain_password, user["hashed_password"]):
-                return {"status": "Wrong login or password"}
-            
-            access_token = self.jwt_service.create_access_token(user)
-            refresh_token = self.jwt_service.create_refresh_token(user)
-            
-            return {
-                "status": "Success",
-                "access_token": access_token,
-                "refresh_token": refresh_token
-            }
-   
-        
-    
+            async with session.get(f"{self.db_service_url}/user/{login}") as response:
+                if response.status != 200:
+                    return {"status": "Wrong login or password"}
+                user = await response.json()
+
+                if not self.pwd_context.verify(plain_password, user["hashed_password"]):
+                    return {"status": "Wrong login or password"}
+
+                access_token = self.jwt_service.create_access_token(user)
+                refresh_token = self.jwt_service.create_refresh_token(user)
+
+                return {
+                    "status": "Success",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token
+                }
+
+    async def register(self, login: str, plain_password: str) -> dict:
+        async with aiohttp.ClientSession() as session:
+            hashed_password = self.pwd_context.hash(plain_password)
+            async with session.post(f"{self.db_service_url}/user", json={"login": login, "hashed_password": hashed_password}) as response:
+                if response.status == 409:
+                    return {"status": "User already exists"}
+                elif response.status != 200:
+                    return {"status": "Registration failed"}
+                await response.json()
+
+            return {"status": "Success"}

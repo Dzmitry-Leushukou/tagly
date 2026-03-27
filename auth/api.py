@@ -29,3 +29,9 @@ async def get_auth(request: AuthRequest):
         raise HTTPException(status_code=401, detail="Wrong login or password")
     return result
 
+@app.post("/register")
+async def register(request: AuthRequest):
+    result = await auth_service.register(request.login, request.password)
+    if result["status"] != "Success":
+        raise HTTPException(status_code=401, detail=result["status"])
+    return result
