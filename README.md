@@ -14,101 +14,110 @@
 ### Backend
 
 #### Auth service
-Auth service is entrance of our app. It`s authorize user and get access token if user is valid.
+Auth service handles user authentication and registration. Issues JWT tokens (access_token + refresh_token) on successful login.
 
 #### DBService
-DBService is service for database of project. It`s connect to Postgre database and execute queries. If database doesnt exist, it create it.
+DBService provides database access layer. Connects to PostgreSQL and Redis cache. Creates tables on startup if they don't exist.
 
-
-### Frontend
 
 ## Endpoints
 
 ### Auth service
-Base url: ```localhost:8000```
-#### /auth
-Base url: ```localhost:8000/auth```
+Base url: `localhost:8000`
 
-Method: ```GET```
+#### `/auth`
+**URL:** `localhost:8000/auth`
 
-Params:
-- login
-- plain_password
+**Method:** `POST`
 
-Return:
-- jwt_token
+**Request body:**
+```json
+{
+  "login": "string",
+  "password": "string"
+}
+```
 
-#### /refresh
-Base url: ```localhost:8000/refresh```
+**Response:**
+```json
+{
+  "status": "Success",
+  "access_token": "jwt_token",
+  "refresh_token": "jwt_token"
+}
+```
 
-Method: ```GET```
+#### `/register`
+**URL:** `localhost:8000/register`
 
-Params:
-- jwt_token
+**Method:** `POST`
 
+**Request body:**
+```json
+{
+  "login": "string",
+  "password": "string"
+}
+```
 
-Return:
-- jwt_token
+**Response:**
+```json
+{
+  "status": "Success"
+}
+```
 
-#### /logout
-Base url: ```localhost:8000/logout```
-
-Method: ```GET```
-
-Params:
-- jwt_token
-
-#### /register
-Base url: ```localhost:8000/register```
-
-Method: ```GET```
-
-Params:
-- login
-- plain_password
-
-Return:
-- jwt_token
+**Error responses:**
+- `401` — User already exists / Registration failed
 
 ### DBService
-Base url: ```localhost:8001/```
+Base url: `localhost:8001`
 
-#### /user
-Base url: ```localhost:8001/user```
+#### `/user/{login}`
+**URL:** `localhost:8001/user/{login}`
 
-Method: ```GET```
+**Method:** `GET`
 
-Params:
-- jwt_token
+**Response:**
+```json
+{
+  "login": "string",
+  "hashed_password": "string",
+  "description": "string"
+}
+```
 
-Return:
-- user_data
+**Error responses:**
+- `404` — User not found
 
-#### /user
-Base url: ```localhost:8001/user```
+#### `/user`
+**URL:** `localhost:8001/user`
 
-Method: ```POST```
+**Method:** `POST`
 
-Params:
-- jwt_token
-- user_data
+**Request body:**
+```json
+{
+  "login": "string",
+  "hashed_password": "string",
+  "description": "string (optional)"
+}
+```
+
+**Response:**
+```json
+{
+  "login": "string"
+}
+```
+
+**Error responses:**
+- `409` — User already exists
+- `500` — Internal server error
 
 ## Data models
 
 #### User
-- login (unique)
-- hashed_password
-- description
-- roleId (FK)
-- interestId (FK)
-#### Relo
-- id
-- name
-- canDeletePost
-- canDeleteUser
-
-### Redis
-
-#### User
-
-- String: cache:{user_id}:{user_data}
+- `login` (string, unique, primary key)
+- `hashed_password` (string, bcrypt)
+- `description` (string, optional)
