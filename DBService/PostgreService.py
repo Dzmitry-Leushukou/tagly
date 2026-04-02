@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from psycopg2.pool import ThreadedConnectionPool
@@ -208,7 +209,6 @@ class PostgreService:
             raise
 
     def create_post(self, content: str, author_id: int) -> dict:
-        """Create a new post and return the created record."""
         try:
             logger.info(f"Creating post for author_id={author_id}")
             result = self.execute_query("""
@@ -223,7 +223,6 @@ class PostgreService:
             raise
 
     def get_tag_by_name(self, name: str) -> dict | None:
-        """Get a tag by name."""
         try:
             result = self.execute_query("""
                 SELECT id, name FROM tags WHERE name = %s LIMIT 1
@@ -234,7 +233,6 @@ class PostgreService:
             return None
 
     def create_tag(self, name: str) -> int:
-        """Create a new tag and return its id."""
         try:
             logger.info(f"Creating tag with name={name}")
             result = self.execute_query("""
@@ -249,7 +247,6 @@ class PostgreService:
             raise
 
     def add_post_tag(self, post_id: int, tag_id: int) -> None:
-        """Create a link between a post and a tag."""
         try:
             logger.info(f"Linking post_id={post_id} with tag_id={tag_id}")
             self.execute_query("""
@@ -260,3 +257,127 @@ class PostgreService:
         except Exception as e:
             logger.error(f"Error creating post_tag link: {e}")
             raise
+
+    def get_all_posts_with_tags(self) -> list:
+        try:
+            posts = self.execute_query("""
+                SELECT p.id, p.content, p.created_at, p.author_id
+                FROM posts p
+                ORDER BY p.created_at DESC
+            """, fetch_all=True)
+            
+            result = []
+            for post in posts:
+                tags = self.execute_query("""
+                    SELECT t.id, t.name
+                    FROM tags t
+                    JOIN post_tags pt ON t.id = pt.tag_id
+                    WHERE pt.post_id = %s
+                """, (post["id"],), fetch_all=True)
+                
+                post_dict = dict(post)
+                post_dict["tags"] = [dict(tag) for tag in tags] if tags else []
+                result.append(post_dict)
+            
+            logger.info(f"Retrieved {len(result)} posts with tags")
+            return result
+        except Exception as e:
+            logger.error(f"Error getting all posts with tags: {e}")
+            raise
+
+    def get_post_tags(self, post_id: int) -> list:
+        try:
+            tags = self.execute_query("""
+                SELECT t.id, t.name
+                FROM tags t
+                JOIN post_tags pt ON t.id = pt.tag_id
+                WHERE pt.post_id = %s
+            """, (post_id,), fetch_all=True)
+            return [dict(tag) for tag in tags] if tags else []
+        except Exception as e:
+            logger.error(f"Error getting post tags: {e}")
+            raise
+
+    def add_shown_post(self, user_id: int, post_id: int, batch_number: int) -> None:
+        try:
+            self.execute_query("""
+                INSERT INTO shown_posts (user_id, post_id, batch_number)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, post_id) DO UPDATE SET batch_number = %s
+            """, (user_id, post_id, batch_number, batch_number), commit=True)
+            logger.info(f"Recorded shown post: user_id={user_id}, post_id={post_id}, batch={batch_number}")
+        except Exception as e:
+            logger.error(f"Error adding shown post: {e}")
+            raise
+
+    def get_shown_posts_batch_numbers(self, user_id: int) -> dict:
+        try:
+            shown = self.execute_query("""
+                SELECT post_id, batch_number
+                FROM shown_posts
+                WHERE user_id = %s
+            """, (user_id,), fetch_all=True)
+            return {row["post_id"]: row["batch_number"] for row in shown} if shown else {}
+        except Exception as e:
+            logger.error(f"Error getting shown posts: {e}")
+            raise
+
+    def update_user_preference_vector(self, login: str, preference_vector: dict) -> None:
+        try:
+            self.execute_query("""
+                UPDATE users
+                SET preference_vector = %s::jsonb
+                WHERE login = %s
+            """, (json.dumps(preference_vector), login), commit=True)
+            logger.info(f"Updated preference_vector for user {login}")
+        except Exception as e:
+            logger.error(f"Error updating preference_vector: {e}")
+            raise
+
+    def add_user_feedback(self, user_id: int, post_id: int, feedback_type: str) -> None:
+        try:
+            self.execute_query("""
+                INSERT INTO user_feedback (user_id, post_id, feedback_type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, post_id) DO UPDATE SET feedback_type = %s, created_at = CURRENT_TIMESTAMP
+            """, (user_id, post_id, feedback_type, feedback_type), commit=True)
+            logger.info(f"Recorded feedback: user_id={user_id}, post_id={post_id}, type={feedback_type}")
+        except Exception as e:
+            logger.error(f"Error adding user feedback: {e}")
+            raise
+
+    def get_user_feedback(self, user_id: int, post_id: int) -> dict | None:
+        try:
+            feedback = self.execute_query("""
+                SELECT id, user_id, post_id, feedback_type, created_at
+                FROM user_feedback
+                WHERE user_id = %s AND post_id = %s
+            """, (user_id, post_id), fetch_one=True)
+            return dict(feedback) if feedback else None
+        except Exception as e:
+            logger.error(f"Error getting user feedback: {e}")
+            raise
+
+    def get_max_batch_number(self, user_id: int) -> int:
+        try:
+            result = self.execute_query("""
+                SELECT MAX(batch_number) as max_batch
+                FROM shown_posts
+                WHERE user_id = %s
+            """, (user_id,), fetch_one=True)
+            return result["max_batch"] if result and result["max_batch"] is not None else 0
+        except Exception as e:
+            logger.error(f"Error getting max batch number: {e}")
+            return 0
+
+    def get_user_shown_posts(self, user_id: int) -> dict:
+        try:
+            shown = self.execute_query("""
+                SELECT post_id, batch_number
+                FROM shown_posts
+                WHERE user_id = %s
+            """, (user_id,), fetch_all=True)
+            return {row["post_id"]: row["batch_number"] for row in shown} if shown else {}
+        except Exception as e:
+            logger.error(f"Error getting user shown posts: {e}")
+            return {}
