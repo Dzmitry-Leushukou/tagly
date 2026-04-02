@@ -206,3 +206,57 @@ class PostgreService:
         except Exception as e:
             logger.error(f"Error creating user with login = {login}: {e}")
             raise
+
+    def create_post(self, content: str, author_id: int) -> dict:
+        """Create a new post and return the created record."""
+        try:
+            logger.info(f"Creating post for author_id={author_id}")
+            result = self.execute_query("""
+                INSERT INTO posts (content, author_id)
+                VALUES (%s, %s)
+                RETURNING id, content, created_at, author_id
+            """, (content, author_id), fetch_one=True, commit=True)
+            logger.info(f"Post created with id={result['id']}")
+            return dict(result)
+        except Exception as e:
+            logger.error(f"Error creating post: {e}")
+            raise
+
+    def get_tag_by_name(self, name: str) -> dict | None:
+        """Get a tag by name."""
+        try:
+            result = self.execute_query("""
+                SELECT id, name FROM tags WHERE name = %s LIMIT 1
+            """, (name,), fetch_one=True)
+            return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Error getting tag by name: {e}")
+            return None
+
+    def create_tag(self, name: str) -> int:
+        """Create a new tag and return its id."""
+        try:
+            logger.info(f"Creating tag with name={name}")
+            result = self.execute_query("""
+                INSERT INTO tags (name)
+                VALUES (%s)
+                RETURNING id
+            """, (name,), fetch_one=True, commit=True)
+            logger.info(f"Tag created with id={result['id']}")
+            return result['id']
+        except Exception as e:
+            logger.error(f"Error creating tag: {e}")
+            raise
+
+    def add_post_tag(self, post_id: int, tag_id: int) -> None:
+        """Create a link between a post and a tag."""
+        try:
+            logger.info(f"Linking post_id={post_id} with tag_id={tag_id}")
+            self.execute_query("""
+                INSERT INTO post_tags (post_id, tag_id)
+                VALUES (%s, %s)
+            """, (post_id, tag_id), commit=True)
+            logger.info(f"Post-tag link created")
+        except Exception as e:
+            logger.error(f"Error creating post_tag link: {e}")
+            raise
