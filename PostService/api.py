@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import random
 import aiohttp
 from fastapi import FastAPI, HTTPException, Header
@@ -26,7 +27,10 @@ DB_SERVICE_URL = "http://db-service:8001"
 FEEDBACK_STEP = 0.1
 PREFERENCE_MIN = -1.0
 PREFERENCE_MAX = 1.0
-RECOMMENDATION_COUNT = 5
+
+EXPLOITATION_COUNT = int(os.getenv("EXPLOITATION_COUNT", "4"))
+EXPLORATION_COUNT = int(os.getenv("EXPLORATION_COUNT", "1"))
+SHUFFLE_RESULTS = os.getenv("SHUFFLE_RESULTS", "False").lower() in ("true", "1", "yes")
 
 
 class PostCreateRequest(BaseModel):
@@ -179,27 +183,55 @@ async def get_recommendations(authorization: str = Header(None)):
             shown = await _get_shown_posts(session, user_id)
             shown_post_ids = set(shown.keys())
 
-        if user_id and preference_vector and any(v != 0 for v in preference_vector.values()):
+        if not user_id or not preference_vector or not any(v != 0 for v in preference_vector.values()):
+            available_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
+            random.shuffle(available_posts)
+            total_count = EXPLOITATION_COUNT + EXPLORATION_COUNT
+            recommended = available_posts[:total_count]
+            exploitation_count = 0
+            exploration_count = len(recommended)
+            logger.info(f"Recommendations (unauthorized): exploitation=0, exploration={exploration_count}")
+        else:
+            unseen_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
+
             scored_posts = []
-            for post in all_posts:
-                if post["id"] in shown_post_ids:
-                    continue
-                
+            for post in unseen_posts:
                 post_tags = [tag["name"] for tag in post.get("tags", [])]
                 relevance = sum(preference_vector.get(tag, 0) for tag in post_tags)
                 scored_posts.append((relevance, post))
 
             scored_posts.sort(key=lambda x: (-x[0], x[1]["id"]))
-            recommended = [post for _, post in scored_posts[:RECOMMENDATION_COUNT]]
 
-            if len(recommended) < RECOMMENDATION_COUNT:
-                remaining = [p for p in all_posts if p["id"] not in shown_post_ids and p["id"] not in [r["id"] for r in recommended]]
-                random.shuffle(remaining)
-                recommended.extend(remaining[:RECOMMENDATION_COUNT - len(recommended)])
-        else:
-            available_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
-            random.shuffle(available_posts)
-            recommended = available_posts[:RECOMMENDATION_COUNT]
+            exploitation_posts = [post for _, post in scored_posts[:EXPLOITATION_COUNT]]
+            exploitation_post_ids = {p["id"] for p in exploitation_posts}
+
+            remaining_posts = [p for p in unseen_posts if p["id"] not in exploitation_post_ids]
+            random.shuffle(remaining_posts)
+            exploration_posts = remaining_posts[:EXPLORATION_COUNT]
+
+            if len(exploitation_posts) < EXPLOITATION_COUNT:
+                needed = EXPLOITATION_COUNT - len(exploitation_posts)
+                available_for_fill = [p for p in remaining_posts if p["id"] not in [ep["id"] for ep in exploration_posts]]
+                random.shuffle(available_for_fill)
+                additional = available_for_fill[:needed]
+                exploitation_posts.extend(additional)
+                exploration_posts = [p for p in exploration_posts if p["id"] not in [p2["id"] for p2 in additional]]
+
+            if len(exploration_posts) < EXPLORATION_COUNT:
+                needed = EXPLORATION_COUNT - len(exploration_posts)
+                taken_ids = {p["id"] for p in exploitation_posts} | {p["id"] for p in exploration_posts}
+                remaining_for_explore = [p for p in unseen_posts if p["id"] not in taken_ids]
+                random.shuffle(remaining_for_explore)
+                exploration_posts.extend(remaining_for_explore[:needed])
+
+            recommended = exploitation_posts + exploration_posts
+
+            if SHUFFLE_RESULTS:
+                random.shuffle(recommended)
+
+            exploitation_count = len(exploitation_posts)
+            exploration_count = len(exploration_posts)
+            logger.info(f"Recommendations: exploitation={exploitation_count}, exploration={exploration_count}")
 
         if user_id:
             batch_number = await _get_next_batch_number(session, user_id)
