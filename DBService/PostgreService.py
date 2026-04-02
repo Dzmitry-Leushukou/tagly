@@ -94,27 +94,103 @@ class PostgreService:
             return None
     
     def init_tables(self):
-        logger.info("Checking if users table exists...")
+        logger.info("Initializing database tables...")
+        
         try:
-            result = self.execute_query("SELECT 1 FROM users LIMIT 1", fetch_one=True)
-            logger.info("Table 'users' already exists")
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    login VARCHAR(255) UNIQUE NOT NULL,
+                    hashed_password VARCHAR(255) NOT NULL,
+                    description TEXT
+                )
+            """, commit=True)
+            logger.info("Table 'users' created or already exists")
         except Exception as e:
-            logger.info(f"Table 'users' does not exist, creating... (error: {e})")
-            try:
-                self.execute_query("""
-                    CREATE TABLE users (
-                        login VARCHAR(255) UNIQUE PRIMARY KEY,
-                        hashed_password VARCHAR(255),
-                        description VARCHAR(255)
-                    )
-                """, commit=True)
-                logger.info("Table 'users' created successfully")
-            except Exception as e:
-                logger.error(f"Error creating table 'users': {e}")
-                raise
+            logger.error(f"Error creating table 'users': {e}")
+            raise
 
-        logger.info("All tables initialized")
-  
+        try:
+            self.execute_query("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS preference_vector JSONB DEFAULT '{}'
+            """, commit=True)
+            logger.info("Column 'preference_vector' added to users")
+        except Exception as e:
+            logger.error(f"Error adding preference_vector: {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS posts (
+                    id SERIAL PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    author_id INT REFERENCES users(id) ON DELETE CASCADE
+                )
+            """, commit=True)
+            logger.info("Table 'posts' created or already exists")
+        except Exception as e:
+            logger.error(f"Error creating table 'posts': {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS tags (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) UNIQUE NOT NULL
+                )
+            """, commit=True)
+            logger.info("Table 'tags' created or already exists")
+        except Exception as e:
+            logger.error(f"Error creating table 'tags': {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS post_tags (
+                    post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+                    tag_id INT REFERENCES tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (post_id, tag_id)
+                )
+            """, commit=True)
+            logger.info("Table 'post_tags' created or already exists")
+        except Exception as e:
+            logger.error(f"Error creating table 'post_tags': {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+                    post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+                    feedback_type VARCHAR(10) CHECK (feedback_type IN ('like', 'dislike')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, post_id)
+                )
+            """, commit=True)
+            logger.info("Table 'user_feedback' created or already exists")
+        except Exception as e:
+            logger.error(f"Error creating table 'user_feedback': {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE TABLE IF NOT EXISTS shown_posts (
+                    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+                    post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+                    batch_number INT,
+                    shown_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, post_id)
+                )
+            """, commit=True)
+            logger.info("Table 'shown_posts' created or already exists")
+        except Exception as e:
+            logger.error(f"Error creating table 'shown_posts': {e}")
+            raise
+
+        logger.info("All tables initialized successfully")
+    
 
     def create_user(self, login, hashed_password, description):
         try:
