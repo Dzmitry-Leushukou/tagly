@@ -3,146 +3,125 @@ import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 
 function Register() {
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: 'Male',
-    username: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [photo, setPhoto] = useState(null);
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.password !== form.confirmPassword) {
-      alert('Passwords do not match');
+    setError('');
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
+    
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    
     try {
-      await authAPI.register(form.username, form.password);
-      alert('Registration successful! Please login.');
-      navigate('/login');
+      await authAPI.register(login, password);
+      // После успешной регистрации - логинимся
+      const response = await authAPI.login(login, password);
+      localStorage.setItem('access_token', response.data.access_token);
+      localStorage.setItem('refresh_token', response.data.refresh_token);
+      navigate('/tag-selection');
     } catch (error) {
-      alert('Registration failed');
+      setError('Registration failed. User may already exist.');
     }
   };
 
   return (
-    <div >
-      <div >
-       
-        <h1 >Create your account</h1>
-
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <h1>Create your account</h1>
         <form onSubmit={handleSubmit}>
-          
-          <div >
-            <div >Upload a profile photo</div>
-            <div  onClick={() => document.getElementById('photoInput').click()}>
-              {photo ? (
-                <img src={URL.createObjectURL(photo)} alt="Profile"  />
-              ) : (
-                <div >
-                  <span>📷</span>
-                </div>
-              )}
-              <input
-                type="file"
-                id="photoInput"
-                accept="image/*"
-                onChange={(e) => setPhoto(e.target.files[0])}
-               
-              />
-            </div>
-          </div>
-
-          <div >Enter your name</div>
-          <div >
-            <div s>
-              <input
-                placeholder="First name"
-                value={form.firstName}
-                onChange={(e) => setForm({...form, firstName: e.target.value})}
-               
-              />
-              <div >Ivan</div>
-            </div>
-            <div >
-              <input
-                placeholder="Last name"
-                value={form.lastName}
-                onChange={(e) => setForm({...form, lastName: e.target.value})}
-                
-              />
-              <div >Ivanov</div>
-            </div>
-          </div>
-
-          <div >Date of birth</div>
-          <div s>
-            <input
-              type="text"
-              placeholder="MM-DD-YYYY"
-              value={form.birthDate}
-              onChange={(e) => setForm({...form, birthDate: e.target.value})}
-              
-            />
-            <div >MM-DD-YYYY</div>
-          </div>
-
-          <div >
-            <label >
-              <input type="radio" name="gender" value="Male" checked={form.gender === 'Male'} onChange={(e) => setForm({...form, gender: e.target.value})} />
-              Male
-            </label>
-            <label >
-              <input type="radio" name="gender" value="Female" checked={form.gender === 'Female'} onChange={(e) => setForm({...form, gender: e.target.value})} />
-              Female
-            </label>
-          </div>
-
-          <div >Username</div>
-          <div >
-            <input
-              placeholder="Username"
-              value={form.username}
-              onChange={(e) => setForm({...form, username: e.target.value})}
-             
-            />
-            <div >user_88</div>
-          </div>
-
-          <div >Password</div>
-          <div >
-            <input
-              type="password"
-              placeholder="Password"
-              value={form.password}
-              onChange={(e) => setForm({...form, password: e.target.value})}
-              
-            />
-            <div >
-              8+ symbols <span >•</span> 1 number <span >•</span> 1 capital letter
-            </div>
-          </div>
-
-          <div >
-            <input
-              type="password"
-              placeholder="Confirm password"
-              value={form.confirmPassword}
-              onChange={(e) => setForm({...form, confirmPassword: e.target.value})}
-              
-            />
-          </div>
-
-          <button type="submit" >submit</button>
+          <input
+            type="text"
+            placeholder="Login"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            style={styles.input}
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password (8+ characters)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={styles.input}
+            required
+          />
+          <input
+            type="password"
+            placeholder="Confirm password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={styles.input}
+            required
+          />
+          {error && <p style={styles.error}>{error}</p>}
+          <button type="submit" style={styles.button}>Register</button>
         </form>
+        <button onClick={() => navigate('/login')} style={styles.linkButton}>
+          Already have an account? Login
+        </button>
       </div>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #FFE6FB 5%, #DDE9FF 100%)',
+  },
+  card: {
+    background: 'white',
+    padding: '40px',
+    borderRadius: '20px',
+    width: '400px',
+    textAlign: 'center',
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    margin: '10px 0',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    fontSize: '16px',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: '12px',
+    background: '#92A9E0',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    marginTop: '10px',
+  },
+  linkButton: {
+    background: 'none',
+    border: 'none',
+    color: '#92A9E0',
+    cursor: 'pointer',
+    marginTop: '15px',
+  },
+  error: {
+    color: 'red',
+    fontSize: '14px',
+    marginTop: '10px',
+  },
+};
 
 export default Register;

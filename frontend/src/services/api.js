@@ -42,9 +42,28 @@ export const authAPI = {
 };
 
 export const postsAPI = {
-  getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
-  createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
-  sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
+  getRecommendations: (page = 1, limit = 5) => 
+    api.get(`${API_POSTS}/recommendations?page=${page}&limit=${limit}`),
+  
+  createPost: (content) => 
+    api.post(`${API_POSTS}/post`, { content }),
+  
+  sendFeedback: (post_id, feedback_type) => 
+    api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
+  
+  getUserPosts: () => 
+    api.get(`${API_POSTS}/my-posts`),
+  
+  getUserPostsByLogin: (login) => 
+    api.get(`${API_POSTS}/user/${login}/posts`),
+};
+
+export const tagsAPI = {
+  getAllTags: () => 
+    api.get(`${API_POSTS}/tags`),
+  
+  saveUserTags: (tagIds) => 
+    api.post(`${API_POSTS}/user-tags`, { tag_ids: tagIds }),
 };
 
 export default api;
