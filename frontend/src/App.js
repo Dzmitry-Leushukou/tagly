@@ -16,11 +16,11 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/tag-selection" element={isAuthenticated ? <TagSelection /> : <Navigate to="/login" />} />
-        <Route path="/" element={isAuthenticated ? <Home /> : <Navigate to="/login" />} />
-        <Route path="/profile" element={isAuthenticated ? <Profile /> : <Navigate to="/login" />} />
-        <Route path="/user/:login" element={isAuthenticated ? <UserProfile /> : <Navigate to="/login" />} />
-        <Route path="/create-post" element={isAuthenticated ? <CreatePost /> : <Navigate to="/login" />} />
+        <Route path="/tag-selection" element={ <TagSelection />} />
+        <Route path="/" element={<Home /> } />
+        <Route path="/profile" element={ <Profile /> } />
+        <Route path="/user/:login" element={<UserProfile /> } />
+        <Route path="/create-post" element={ <CreatePost /> } />
       </Routes>
     </BrowserRouter>
   );
