@@ -14,24 +14,19 @@ function TagSelection() {
 
   const fetchTags = async () => {
     try {
-      // TODO: когда бэкендер сделает ручку для получения всех тегов
-      // Пока моковые данные
-      const mockTags = [
-        { id: 1, name: 'technology' },
-        { id: 2, name: 'sports' },
-        { id: 3, name: 'music' },
-        { id: 4, name: 'movies' },
-        { id: 5, name: 'gaming' },
-        { id: 6, name: 'art' },
-        { id: 7, name: 'science' },
-        { id: 8, name: 'food' },
-        { id: 9, name: 'travel' },
-        { id: 10, name: 'fashion' },
-      ];
-      setAllTags(mockTags);
+      const response = await tagsAPI.getAllTags();
+      setAllTags(response.data.tags || []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching tags:', error);
+     
+      const mockTags = [
+        { id: 1, name: 'technology' }, { id: 2, name: 'sports' },
+        { id: 3, name: 'music' }, { id: 4, name: 'movies' },
+        { id: 5, name: 'gaming' }, { id: 6, name: 'art' },
+        { id: 7, name: 'science' }, { id: 8, name: 'food' },
+      ];
+      setAllTags(mockTags);
       setLoading(false);
     }
   };
@@ -45,39 +40,59 @@ function TagSelection() {
   };
 
   const handleContinue = () => {
-    // Сохраняем выбранные теги в localStorage или отправляем на бэк
     localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
     navigate('/');
   };
 
-  if (loading) return <div style={styles.container}>Loading tags...</div>;
+  const handleSkip = () => {
+    navigate('/');
+  };
+
+  if (loading) return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <div style={styles.blueShape}>
+          <span style={styles.title}>Select your interests</span>
+        </div>
+        <div style={styles.loading}>Loading tags...</div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1>Select your interests</h1>
-        <p>Choose tags that interest you (click to select)</p>
-        <div style={styles.tagsContainer}>
-          {allTags.map(tag => (
-            <button
-              key={tag.id}
-              onClick={() => toggleTag(tag)}
-              style={{
-                ...styles.tag,
-                background: selectedTags.find(t => t.id === tag.id) ? '#92A9E0' : '#f0f0f0',
-                color: selectedTags.find(t => t.id === tag.id) ? 'white' : '#333',
-              }}
-            >
-              #{tag.name}
-            </button>
-          ))}
+        <div style={styles.blueShape}>
+          <span style={styles.title}>Select your interests</span>
         </div>
-        <button onClick={handleContinue} style={styles.button}>
-          Continue ({selectedTags.length} selected)
-        </button>
-        <button onClick={() => navigate('/')} style={styles.skipButton}>
-          Skip for now
-        </button>
+
+        <div style={styles.content}>
+          <p style={styles.subtitle}>Choose tags that interest you</p>
+          
+          <div style={styles.tagsContainer}>
+            {allTags.map(tag => (
+              <button
+                key={tag.id}
+                onClick={() => toggleTag(tag)}
+                style={{
+                  ...styles.tag,
+                  background: selectedTags.find(t => t.id === tag.id) ? '#92A9E0' : 'white',
+                  color: selectedTags.find(t => t.id === tag.id) ? 'white' : '#304069',
+                  border: selectedTags.find(t => t.id === tag.id) ? '2px solid #92A9E0' : '2px solid #9EABC3',
+                }}
+              >
+                #{tag.name}
+              </button>
+            ))}
+          </div>
+
+          <div style={styles.buttonGroup}>
+            <button onClick={handleSkip} style={styles.skipBtn}>Skip for now</button>
+            <button onClick={handleContinue} style={styles.continueBtn}>
+              Continue ({selectedTags.length})
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -90,48 +105,87 @@ const styles = {
     alignItems: 'center',
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #FFE6FB 5%, #DDE9FF 100%)',
-    padding: '20px',
   },
   card: {
-    background: 'white',
-    padding: '40px',
-    borderRadius: '20px',
-    maxWidth: '800px',
+    width: '600px',
+    background: '#FFFFFF',
+    borderRadius: '50px',
+    border: '2px solid #9EABC3',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+    overflow: 'hidden',
+  },
+  blueShape: {
+    background: '#92A9E0',
+    padding: '20px',
     textAlign: 'center',
+  },
+  title: {
+    fontFamily: "'IM Fell French Canon', serif",
+    fontSize: '30px',
+    color: '#304069',
+    fontWeight: 'bold',
+    margin: 0,
+  },
+  content: {
+    padding: '30px',
+  },
+  subtitle: {
+    fontFamily: "'IM Fell French Canon', serif",
+    fontSize: '16px',
+    color: '#9F9EC3',
+    textAlign: 'center',
+    marginBottom: '25px',
   },
   tagsContainer: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '10px',
+    gap: '12px',
     justifyContent: 'center',
-    margin: '20px 0',
+    marginBottom: '30px',
   },
   tag: {
     padding: '10px 20px',
     borderRadius: '25px',
-    border: 'none',
-    cursor: 'pointer',
     fontSize: '14px',
+    fontFamily: "'IM Fell French Canon', serif",
+    cursor: 'pointer',
     transition: 'all 0.3s ease',
   },
-  button: {
-    padding: '12px 30px',
-    background: '#92A9E0',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    marginTop: '20px',
+  buttonGroup: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '15px',
   },
-  skipButton: {
-    padding: '12px 30px',
-    background: 'none',
-    color: '#92A9E0',
-    border: 'none',
-    cursor: 'pointer',
+  skipBtn: {
+    padding: '10px 25px',
+    background: 'white',
+    border: '2px solid #9EABC3',
+    borderRadius: '20px',
     fontSize: '16px',
-    marginTop: '10px',
+    fontFamily: "'IM Fell French Canon', serif",
+    fontStyle: 'italic',
+    color: '#9F9EC3',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  continueBtn: {
+    padding: '10px 25px',
+    background: '#92A9E0',
+    border: '2px solid #9EABC3',
+    borderRadius: '20px',
+    fontSize: '16px',
+    fontFamily: "'IM Fell French Canon', serif",
+    fontStyle: 'italic',
+    color: 'white',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  loading: {
+    textAlign: 'center',
+    padding: '50px',
+    fontFamily: "'IM Fell French Canon', serif",
+    fontSize: '16px',
+    color: '#9F9EC3',
   },
 };
 
