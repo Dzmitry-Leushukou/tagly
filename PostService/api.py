@@ -345,3 +345,14 @@ async def submit_feedback(
                 logger.warning(f"Failed to record feedback: {feedback_resp.status}")
 
     return {"status": "ok", "updated_vector": preference_vector}
+
+
+@app.get("/tags")
+async def get_all_tags():
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{DB_SERVICE_URL}/tags") as tags_resp:
+            if tags_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get tags")
+            tags = await tags_resp.json()
+
+    return {"tags": [tag["name"] for tag in tags]}

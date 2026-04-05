@@ -260,4 +260,14 @@ def get_max_batch_number(user_id: int):
     except Exception as e:
         logger.error(f"Error getting max batch number: {e}")
         raise fastapi.HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/tags")
+def get_all_tags():
+    try:
+        tags = postgres_service.get_all_tags()
+        return tags
+    except Exception as e:
+        logger.error(f"Error getting all tags: {e}")
+        raise fastapi.HTTPException(status_code=500, detail="Internal server error")
     
