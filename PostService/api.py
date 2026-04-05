@@ -52,6 +52,18 @@ class FeedbackResponse(BaseModel):
     updated_vector: dict
 
 
+class FavoriteTagsRequest(BaseModel):
+    tag_ids: list[int]
+
+
+class FavoriteTagsResponse(BaseModel):
+    status: str
+    updated_vector: dict
+
+
+TAG_PREFERENCE_BOOST = 0.5
+
+
 @app.get("/")
 async def read_root():
     return {"Status": "Post service alive!"}
@@ -343,6 +355,85 @@ async def submit_feedback(
         ) as feedback_resp:
             if feedback_resp.status not in (200, 201):
                 logger.warning(f"Failed to record feedback: {feedback_resp.status}")
+
+    return {"status": "ok", "updated_vector": preference_vector}
+
+
+@app.post("/tags/favorite", response_model=FavoriteTagsResponse)
+async def set_favorite_tags(
+    request: FavoriteTagsRequest,
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = authorization.split(" ", 1)[1]
+
+    if not request.tag_ids:
+        raise HTTPException(status_code=400, detail="tag_ids cannot be empty")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{AUTH_SERVICE_URL}/verify",
+            headers={"Authorization": f"Bearer {token}"}
+        ) as verify_resp:
+            if verify_resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
+            verify_data = await verify_resp.json()
+            user_login = verify_data.get("login")
+
+        if not user_login:
+            raise HTTPException(status_code=401, detail="Login not found in token")
+
+        async with session.get(f"{DB_SERVICE_URL}/user/{user_login}") as user_resp:
+            if user_resp.status != 200:
+                raise HTTPException(status_code=404, detail="User not found")
+            user_data = await user_resp.json()
+            preference_vector = user_data.get("preference_vector", {}) or {}
+
+        # Get all tags and build id -> name mapping
+        all_tags = []
+        offset = 0
+        limit = 100
+        while True:
+            async with session.get(f"{DB_SERVICE_URL}/tags?limit={limit}&offset={offset}") as tags_resp:
+                if tags_resp.status != 200:
+                    raise HTTPException(status_code=500, detail="Failed to get tags")
+                tags = await tags_resp.json()
+                if not tags:
+                    break
+                all_tags.extend(tags)
+                if len(tags) < limit:
+                    break
+                offset += limit
+
+        tag_id_to_name = {tag["id"]: tag["name"] for tag in all_tags}
+
+        # Validate requested tag IDs
+        for tag_id in request.tag_ids:
+            if tag_id not in tag_id_to_name:
+                raise HTTPException(status_code=400, detail=f"Tag with id={tag_id} not found")
+
+        # Boost selected tags, leave others unchanged
+        for tag_id in request.tag_ids:
+            tag_name = tag_id_to_name[tag_id]
+            current = preference_vector.get(tag_name, 0)
+            new_weight = current + TAG_PREFERENCE_BOOST
+            new_weight = max(PREFERENCE_MIN, min(PREFERENCE_MAX, new_weight))
+            preference_vector[tag_name] = round(new_weight, 2)
+
+        # Clean up zeros
+        preference_vector = {k: v for k, v in preference_vector.items() if abs(v) > 1e-9}
+
+        async with session.patch(
+            f"{DB_SERVICE_URL}/user/{user_login}/preference_vector",
+            json={"preference_vector": preference_vector}
+        ) as patch_resp:
+            if patch_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to update preference vector")
 
     return {"status": "ok", "updated_vector": preference_vector}
 
