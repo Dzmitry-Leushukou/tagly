@@ -1,0 +1,77 @@
+// src/services/api.js
+import axios from 'axios';
+import { mockAPI } from './mockApi';
+
+// Переключи на false, когда бэкенд заработает
+const USE_MOCK = true;  // ← сейчас используем мок
+
+let authAPI, postsAPI, tagsAPI, defaultAPI;
+
+if (USE_MOCK) {
+  // Используем мок API
+  authAPI = mockAPI;
+  postsAPI = mockAPI;
+  tagsAPI = mockAPI;
+  defaultAPI = mockAPI;
+} else {
+  // Реальный API (когда бэкенд заработает)
+  const API_AUTH = 'http://localhost:8000';
+  const API_POSTS = 'http://localhost:8002';
+
+  const api = axios.create();
+
+  api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const originalRequest = error.config;
+      if (error.response?.status === 401 && !originalRequest._retry) {
+        originalRequest._retry = true;
+        const refreshToken = localStorage.getItem('refresh_token');
+        try {
+          const response = await axios.post(`${API_AUTH}/refresh`, {
+            refresh_token: refreshToken
+          });
+          localStorage.setItem('access_token', response.data.access_token);
+          originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
+          return api(originalRequest);
+        } catch (err) {
+          localStorage.clear();
+          window.location.href = '/login';
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  authAPI = {
+    register: (login, password) => api.post(`${API_AUTH}/register`, { login, password }),
+    login: (login, password) => api.post(`${API_AUTH}/auth`, { login, password }),
+  };
+
+  postsAPI = {
+    getRecommendations: (page = 1, limit = 5) => 
+      api.get(`${API_POSTS}/recommendations?page=${page}&limit=${limit}`),
+    createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
+    sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
+    getUserPosts: () => api.get(`${API_POSTS}/my-posts`),
+    getUserPostsByLogin: (login) => api.get(`${API_POSTS}/user/${login}/posts`),
+  };
+
+  tagsAPI = {
+    getAllTags: () => api.get(`${API_POSTS}/tags`),
+    saveUserTags: (tagIds) => api.post(`${API_POSTS}/user-tags`, { tag_ids: tagIds }),
+  };
+
+  defaultAPI = api;
+}
+
+export { authAPI, postsAPI, tagsAPI };
+export default defaultAPI;
