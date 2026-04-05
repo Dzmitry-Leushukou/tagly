@@ -4,12 +4,20 @@ import os
 import random
 import aiohttp
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from DeepseekService import send_completion_request
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Post service")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 TAG_SYSTEM_PROMPT = """Ты — классификатор текстов. Твоя задача: выделить ключевые темы (теги) из текста поста.
 Теги должны быть:
