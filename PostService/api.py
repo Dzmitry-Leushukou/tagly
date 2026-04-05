@@ -348,9 +348,9 @@ async def submit_feedback(
 
 
 @app.get("/tags")
-async def get_all_tags():
+async def get_all_tags(limit: int = 50, offset: int = 0):
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{DB_SERVICE_URL}/tags") as tags_resp:
+        async with session.get(f"{DB_SERVICE_URL}/tags?limit={limit}&offset={offset}") as tags_resp:
             if tags_resp.status != 200:
                 raise HTTPException(status_code=500, detail="Failed to get tags")
             tags = await tags_resp.json()

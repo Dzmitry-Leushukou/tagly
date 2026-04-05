@@ -263,9 +263,9 @@ def get_max_batch_number(user_id: int):
 
 
 @app.get("/tags")
-def get_all_tags():
+def get_all_tags(limit: int = 50, offset: int = 0):
     try:
-        tags = postgres_service.get_all_tags()
+        tags = postgres_service.get_all_tags(limit=limit, offset=offset)
         return tags
     except Exception as e:
         logger.error(f"Error getting all tags: {e}")

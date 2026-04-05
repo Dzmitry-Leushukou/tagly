@@ -382,14 +382,15 @@ class PostgreService:
             logger.error(f"Error getting user shown posts: {e}")
             return {}
 
-    def get_all_tags(self) -> list:
+    def get_all_tags(self, limit: int = 50, offset: int = 0) -> list:
         try:
             tags = self.execute_query("""
                 SELECT DISTINCT t.id, t.name
                 FROM tags t
                 INNER JOIN post_tags pt ON t.id = pt.tag_id
                 ORDER BY t.name
-            """, fetch_all=True)
+                LIMIT %s OFFSET %s
+            """, (limit, offset), fetch_all=True)
             return [dict(tag) for tag in tags] if tags else []
         except Exception as e:
             logger.error(f"Error getting all tags: {e}")
