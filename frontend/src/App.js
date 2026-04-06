@@ -6,7 +6,6 @@ import TagSelection from './pages/TagSelection';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import UserProfile from './pages/UserProfile';
-import CreatePost from './pages/CreatePost';
 
 function App() {
   const isAuthenticated = !!localStorage.getItem('access_token');
@@ -16,11 +15,10 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/tag-selection" element={ <TagSelection />} />
-        <Route path="/" element={<Home /> } />
-        <Route path="/profile" element={ <Profile /> } />
-        <Route path="/user/:login" element={<UserProfile /> } />
-        <Route path="/create-post" element={ <CreatePost /> } />
+        <Route path="/tag-selection" element={isAuthenticated ? <TagSelection /> : <Navigate to="/login" />} />
+        <Route path="/" element={isAuthenticated ? <Home /> : <Navigate to="/login" />} />
+        <Route path="/profile" element={isAuthenticated ? <Profile /> : <Navigate to="/login" />} />
+        <Route path="/user/:login" element={isAuthenticated ? <UserProfile /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   );

@@ -69,6 +69,10 @@ function Register() {
       const response = await authAPI.login(form.username, form.password);
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
+      localStorage.setItem('login', form.username);
+      localStorage.setItem('firstName', form.firstName);
+      localStorage.setItem('lastName', form.lastName);
+      localStorage.setItem('bio', '');
       navigate('/tag-selection');
     } catch (error) {
       setError('Registration failed. User may already exist.');
@@ -78,15 +82,12 @@ function Register() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        
         <div style={styles.blueShape}>
           <span style={styles.title}>Create your account</span>
         </div>
 
         <form onSubmit={handleSubmit}>
-          
           <div style={styles.photoSection}>
-            
             <div style={styles.photoUpload} onClick={() => document.getElementById('photoInput').click()}>
               {photo ? (
                 <img src={URL.createObjectURL(photo)} alt="Profile" style={styles.photoPreview} />
@@ -115,7 +116,6 @@ function Register() {
                   onChange={(e) => setForm({...form, firstName: e.target.value})}
                   style={styles.nameInput}
                 />
-               
               </div>
               <div style={styles.nameField}>
                 <input
@@ -125,7 +125,6 @@ function Register() {
                   onChange={(e) => setForm({...form, lastName: e.target.value})}
                   style={styles.nameInput}
                 />
-               
               </div>
             </div>
           </div>
@@ -134,58 +133,12 @@ function Register() {
             <div style={styles.halfField}>
               <div style={styles.fieldLabel}>Date of birth</div>
               <input
-              type="text"
-              placeholder="YYYY-MM-DD"
-              value={form.birthDate}
-              onChange={(e) => {
-                let value = e.target.value.replace(/[^0-9-]/g, '');
-                
-                if (value.length === 4 || value.length === 7) {
-                  value += '-';
-                }
-                if (value.length > 10) {
-                  value = value.slice(0, 10);
-                }
-                if (value.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                  const [year, month, day] = value.split('-').map(Number);
-                  const date = new Date(year, month - 1, day);
-                  
-                  const isValid = date.getFullYear() === year && 
-                                date.getMonth() === month - 1 && 
-                                date.getDate() === day;
-                  
-                  if (!isValid) {
-                   
-                    setForm({...form, birthDate: value});
-                    setError('Invalid date');
-                    return;
-                  }
-                }
-                
-                setForm({...form, birthDate: value});
-                setError(''); 
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                if (value.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                  const [year, month, day] = value.split('-').map(Number);
-                  const date = new Date(year, month - 1, day);
-                  const isValid = date.getFullYear() === year && 
-                                date.getMonth() === month - 1 && 
-                                date.getDate() === day;
-                  
-                  if (!isValid) {
-                    setError('Please enter a valid date (YYYY-MM-DD)');
-                    setForm({...form, birthDate: ''});
-                  } else {
-                    setError('');
-                  }
-                } else if (value.length > 0 && value.length !== 10) {
-                  setError('Date must be in format YYYY-MM-DD');
-                }
-              }}
-              style={styles.input}
-            />
+                type="text"
+                placeholder="YYYY-MM-DD"
+                value={form.birthDate}
+                onChange={(e) => setForm({...form, birthDate: e.target.value})}
+                style={styles.input}
+              />
             </div>
             <div style={styles.halfField}>
               <div style={styles.fieldLabel}>Gender</div>
@@ -220,46 +173,40 @@ function Register() {
                 <span style={styles.errorIcon}>✘</span>
               )}
             </div>
-           
           </div>
 
           <div style={styles.passwordContainer}>
             <div style={styles.passwordRow}>
-            
-                <div style={styles.passwordField}>
-                  <div style={styles.fieldLabel}>Password</div>
-                  <div style={styles.inputIconWrapper}>
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={form.password}
-                      onChange={(e) => setForm({...form, password: e.target.value})}
-                      style={styles.passwordInput}  
-                    />
-                  </div>
-                </div>
-
-                <div style={styles.passwordField}>
-                  <div style={styles.fieldLabel}>Confirm password</div>
-                  <div style={styles.inputIconWrapper}>
-                    <input
-                      type="password"
-                      placeholder="Confirm password"
-                      value={form.confirmPassword}
-                      onChange={(e) => setForm({...form, confirmPassword: e.target.value})}
-                      style={styles.passwordInput}  
-                    />
-                    {form.confirmPassword && (
-                      <span style={passwordsMatch ? styles.successIcon : styles.errorIcon}>
-                        {passwordsMatch ? '✓' : '✘'}
-                      </span>
-                    )}
-                  </div>
-                  
+              <div style={styles.passwordField}>
+                <div style={styles.fieldLabel}>Password</div>
+                <div style={styles.inputIconWrapper}>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={form.password}
+                    onChange={(e) => setForm({...form, password: e.target.value})}
+                    style={styles.passwordInput}
+                  />
                 </div>
               </div>
-            
-
+              <div style={styles.passwordField}>
+                <div style={styles.fieldLabel}>Confirm password</div>
+                <div style={styles.inputIconWrapper}>
+                  <input
+                    type="password"
+                    placeholder="Confirm password"
+                    value={form.confirmPassword}
+                    onChange={(e) => setForm({...form, confirmPassword: e.target.value})}
+                    style={styles.passwordInput}
+                  />
+                  {form.confirmPassword && (
+                    <span style={passwordsMatch ? styles.successIcon : styles.errorIcon}>
+                      {passwordsMatch ? '✓' : '✘'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
             <div style={styles.passwordHintsLeft}>
               <div style={styles.hintRow}>
                 <span style={hasMinLength ? styles.hintSuccess : styles.hintError}>
@@ -479,15 +426,6 @@ const styles = {
     fontSize: '14px',
     fontFamily: "'IM Fell French Canon', serif",
     opacity: 0.7,
-  },
-  exampleTextLeft: {
-    fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '12px',
-    color: '#9F9EC3',
-    marginTop: '5px',
-    fontStyle: 'italic',
-    textAlign: 'left',
-    paddingLeft: '10px',
   },
   genderGroup: {
     display: 'flex',

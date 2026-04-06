@@ -1,29 +1,50 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { authAPI, userAPI } from '../services/api';
 
 function Login() {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     try {
       const response = await authAPI.login(login, password);
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
+      localStorage.setItem('login', login);
+      
+      try {
+        const userResponse = await userAPI.getUser(login);
+        const userData = userResponse.data;
+      
+        if (userData.first_name) localStorage.setItem('firstName', userData.first_name);
+        if (userData.last_name) localStorage.setItem('lastName', userData.last_name);
+        if (userData.bio) localStorage.setItem('bio', userData.bio);
+      } catch (err) {
+        console.error('Could not fetch user data:', err);
+        
+        if (!localStorage.getItem('firstName')) {
+          localStorage.setItem('firstName', login);
+          localStorage.setItem('lastName', '');
+        }
+      }
+      
       navigate('/');
     } catch (error) {
-      alert('Ошибка входа');
+      setError('Ошибка входа. Проверьте логин и пароль.');
     }
   };
 
+ 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.blueShape}>
-          <span style={styles.loginTitle}>log in to   </span>
+          <span style={styles.loginTitle}>log in to </span>
           <span style={styles.taglyTitle}>Tagly</span>
         </div>
 
@@ -35,8 +56,6 @@ function Login() {
               value={login}
               onChange={(e) => setLogin(e.target.value)}
               style={styles.input}
-              onMouseEnter={(e) => e.target.style.background = 'rgba(159, 158, 195, 0.2)'}
-              onMouseLeave={(e) => e.target.style.background = 'rgba(159, 158, 195, 0.05)'}
             />
           </div>
           
@@ -47,57 +66,19 @@ function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={styles.input}
-              onMouseEnter={(e) => e.target.style.background = 'rgba(159, 158, 195, 0.2)'}
-              onMouseLeave={(e) => e.target.style.background = 'rgba(159, 158, 195, 0.05)'}
             />
           </div>
           
+          {error && <p style={styles.errorText}>{error}</p>}
+          
           <div style={styles.submitWrapper}>
-            <button 
-              type="submit" 
-              style={styles.submitBtn}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#7a8fc7';
-                e.target.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = '#92A9E0';
-                e.target.style.transform = 'scale(1)';
-              }}
-            >
-              submit
-            </button>
+            <button type="submit" style={styles.submitBtn}>submit</button>
           </div>
         </form>
         
         <div style={styles.bottomButtonsContainer}>
-          <button 
-            style={styles.resetBtn}
-            onMouseEnter={(e) => {
-              e.target.style.color = '#92A9E0';
-              e.target.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.color = '#9F9EC3';
-              e.target.style.transform = 'scale(1)';
-            }}
-          >
-            reset password
-          </button>
-          <button 
-            style={styles.signupBtn}
-            onClick={() => navigate('/register')}
-            onMouseEnter={(e) => {
-              e.target.style.color = '#92A9E0';
-              e.target.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.color = '#9F9EC3';
-              e.target.style.transform = 'scale(1)';
-            }}
-          >
-            sign up
-          </button>
+          <button style={styles.resetBtn}>reset password</button>
+          <button style={styles.signupBtn} onClick={() => navigate('/register')}>sign up</button>
         </div>
       </div>
       
@@ -124,7 +105,6 @@ const styles = {
   card: {
     width: '700px',
     height: '450px',
-    
     background: '#FFFFFF',
     borderRadius: '50px',
     border: '2px solid #9EABC3',
@@ -195,7 +175,7 @@ const styles = {
     fontFamily: "'IM Fell French Canon', serif",
     fontStyle: 'italic',
     color: 'white',
-   
+    cursor: 'pointer',
     transition: 'all 0.3s ease',
   },
   bottomButtonsContainer: {
@@ -213,7 +193,7 @@ const styles = {
     fontSize: '26px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#9F9EC3',
-    
+    cursor: 'pointer',
     fontStyle: 'italic',
     textDecoration: 'underline',
     transition: 'all 0.3s ease',
@@ -225,7 +205,7 @@ const styles = {
     fontSize: '26px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#9F9EC3',
-   
+    cursor: 'pointer',
     fontStyle: 'italic',
     textDecoration: 'underline',
     transition: 'all 0.3s ease',
@@ -238,9 +218,15 @@ const styles = {
     zIndex: 1,
   },
   monster: {
-    width: '600px',
+    width: '400px',
     height: 'auto',
     opacity: 0.9,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: '18px',
+    marginTop: '10px',
+    textAlign: 'center',
   },
 };
 

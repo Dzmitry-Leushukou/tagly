@@ -5,6 +5,12 @@ import { postsAPI } from '../services/api';
 function Profile() {
   const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    bio: '',
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -12,20 +18,54 @@ function Profile() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadUserPosts();
-  }, []);
+  // временный костыль
+  const usersMap = {
+    1: "testuser",
+    5: "space_explorer", 
+    7: "auto_expert",
+    9: "code_ninja",
+    11: "bio_researcher",
+    13: "alice_12" 
+  };
+
+  const loadUserProfile = () => {
+    const firstName = localStorage.getItem('firstName') || 'User';
+    const lastName = localStorage.getItem('lastName') || '';
+    const username = localStorage.getItem('login') || 'user';
+    const bio = localStorage.getItem('bio') || '';
+    
+    setUserData({
+      firstName: firstName,
+      lastName: lastName,
+      username: username,
+      bio: bio,
+    });
+  };
 
   const loadUserPosts = async () => {
     try {
-      const response = await postsAPI.getUserPosts();
-      setUserPosts(response.data.posts || []);
+      const response = await postsAPI.getAllPosts();
+      const allPosts = response.data || [];
+      const currentLogin = localStorage.getItem('login');
+      
+      const myPosts = allPosts.filter(post => {
+        const postAuthorLogin = usersMap[post.author_id];
+        return postAuthorLogin === currentLogin;
+      });
+      
+      setUserPosts(myPosts);
     } catch (error) {
       console.error('Error loading user posts:', error);
+      setUserPosts([]);
     } finally {
       setLoading(false);
     }
   };
+  
+  useEffect(() => {
+    loadUserProfile();
+    loadUserPosts();
+  }, []);
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
@@ -45,7 +85,7 @@ function Profile() {
         await postsAPI.deletePost(postId);
         loadUserPosts();
       } catch (error) {
-        alert('Error deleting post');
+        alert('Error deleting post (endpoint not available yet)');
       }
     }
   };
@@ -57,9 +97,59 @@ function Profile() {
         await postsAPI.updatePost(postId, newContent);
         loadUserPosts();
       } catch (error) {
-        alert('Error updating post');
+        alert('Error updating post (endpoint not available yet)');
       }
     }
+  };
+
+  const handleLike = async (postId) => {
+    const post = userPosts.find(p => p.id === postId);
+    if (post.user_liked) {
+      setUserPosts(userPosts.map(p => 
+        p.id === postId ? {...p, user_liked: false, likes: (p.likes || 0) - 1} : p
+      ));
+      return;
+    }
+    if (post.user_disliked) {
+      setUserPosts(userPosts.map(p => 
+        p.id === postId ? {
+          ...p, 
+          user_liked: true, 
+          user_disliked: false, 
+          likes: (p.likes || 0) + 1, 
+          dislikes: (p.dislikes || 0) - 1
+        } : p
+      ));
+      return;
+    }
+    setUserPosts(userPosts.map(p => 
+      p.id === postId ? {...p, user_liked: true, likes: (p.likes || 0) + 1} : p
+    ));
+  };
+
+  const handleDislike = async (postId) => {
+    const post = userPosts.find(p => p.id === postId);
+    if (post.user_disliked) {
+      setUserPosts(userPosts.map(p => 
+        p.id === postId ? {...p, user_disliked: false, dislikes: (p.dislikes || 0) - 1} : p
+      ));
+      return;
+    }
+    if (post.user_liked) {
+      setUserPosts(userPosts.map(p => 
+        p.id === postId ? {
+          ...p, 
+          user_liked: false, 
+          user_disliked: true, 
+          likes: (p.likes || 0) - 1, 
+          dislikes: (p.dislikes || 0) + 1
+        } : p
+      ));
+      return;
+    }
+    setUserPosts(userPosts.map(p => 
+      p.id === postId ? {...p, user_disliked: true, dislikes: (p.dislikes || 0) + 1} : p
+    ));
   };
 
   const handleSearch = (e) => {
@@ -77,16 +167,15 @@ function Profile() {
     }
   };
 
-  const login = localStorage.getItem('login') || 'user';
-  const totalLikes = userPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
-
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
   };
 
+  const totalLikes = userPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
+  const fullName = `${userData.firstName} ${userData.lastName}`.trim() || userData.username;
+
   return (
     <div style={styles.container}>
-      {/* Навбар как на Home */}
       <div style={styles.navbar}>
         <div style={styles.navbarContent}>
           <div style={styles.logoContainer}>
@@ -132,19 +221,19 @@ function Profile() {
       <div style={styles.navbarSpacer}></div>
 
       <div style={styles.main}>
-        {/* Карточка профиля с фото */}
         <div style={styles.profileCard}>
           <div style={styles.profileHeader}>
             <div style={styles.profileAvatar}>
               <img 
-                src={getAvatarUrl(login)} 
+                src={getAvatarUrl(userData.username)} 
                 alt="Profile"
                 style={styles.avatarImage}
               />
             </div>
             <div style={styles.profileInfo}>
-              <h1 style={styles.profileName}>Ivan Ivanov</h1>
-              <p style={styles.profileUsername}>@{login}</p>
+              <h1 style={styles.profileName}>{fullName}</h1>
+              <p style={styles.profileUsername}>@{userData.username}</p>
+              {userData.bio && <p style={styles.profileBio}>{userData.bio}</p>}
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
                   <span style={styles.statNumber}>{userPosts.length}</span>
@@ -159,12 +248,11 @@ function Profile() {
           </div>
         </div>
 
-        {/* Поле для создания поста */}
         <div style={styles.createPostCard}>
           <div style={styles.createPostHeader}>
             <div style={styles.createPostAvatar}>
               <img 
-                src={getAvatarUrl(login)} 
+                src={getAvatarUrl(userData.username)} 
                 alt="Avatar"
                 style={styles.createPostAvatarImg}
               />
@@ -179,20 +267,19 @@ function Profile() {
           </div>
         </div>
 
-        {/* Лента постов пользователя */}
         <div style={styles.feed}>
           {loading && <p style={styles.loading}>Loading...</p>}
           
-          {userPosts.map(post => (
-            <div key={post.id} id={`post-${post.id}`} style={styles.post}>
+          {userPosts.map((post, index) => (
+            <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img 
-                    src={getAvatarUrl(login)} 
+                    src={getAvatarUrl(userData.username)} 
                     alt="Avatar"
                     style={styles.postAvatar}
                   />
-                  <span style={styles.postAuthor}>@{login}</span>
+                  <span style={styles.postAuthor}>@{userData.username}</span>
                 </div>
                 <div style={styles.postActions}>
                   <button onClick={() => handleEditPost(post.id, post.content)} style={styles.editButton}>
@@ -207,12 +294,29 @@ function Profile() {
                 {post.content}
               </p>
               <div style={styles.tags}>
-                {post.tags?.map(tag => (
-                  <span key={tag.id} style={styles.tag}>- {tag.name}</span>
+                {post.tags?.map((tag, tagIndex) => (
+                  <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                 ))}
               </div>
               <div style={styles.postFooter}>
-                <button style={styles.likeButton}>❤️ {post.likes || 0}</button>
+                <button 
+                  onClick={() => handleLike(post.id)} 
+                  style={{
+                    ...styles.likeButton,
+                    color: post.user_liked ? '#ff4444' : '#9F9EC3'
+                  }}
+                >
+                  ❤️ {post.likes || 0}
+                </button>
+                <button 
+                  onClick={() => handleDislike(post.id)} 
+                  style={{
+                    ...styles.dislikeButton,
+                    color: post.user_disliked ? '#ff4444' : '#9F9EC3'
+                  }}
+                >
+                  💔 {post.dislikes || 0}
+                </button>
               </div>
             </div>
           ))}
@@ -223,7 +327,6 @@ function Profile() {
         </div>
       </div>
 
-      {/* Модальное окно создания поста */}
       {showCreateModal && (
         <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -387,7 +490,14 @@ const styles = {
     fontFamily: "'IM Fell French Canon', serif",
     fontSize: '31px',
     color: '#92A9E0',
+    marginBottom: '15px',
+  },
+  profileBio: {
+    fontFamily: "'IM Fell French Canon', serif",
+    fontSize: '21px',
+    color: '#304069',
     marginBottom: '25px',
+    lineHeight: '1.5',
   },
   profileStats: {
     display: 'flex',
@@ -523,6 +633,8 @@ const styles = {
     color: '#92A9E0',
   },
   postFooter: {
+    display: 'flex',
+    gap: '39px',
     paddingTop: '19px',
     borderTop: '1px solid #9EABC3',
   },
@@ -531,7 +643,16 @@ const styles = {
     border: 'none',
     fontSize: '27px',
     fontFamily: "'IM Fell French Canon', serif",
-    color: '#9F9EC3',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  dislikeButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '27px',
+    fontFamily: "'IM Fell French Canon', serif",
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',

@@ -15,9 +15,17 @@ function Home() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const navigate = useNavigate();
 
-  // Функция для получения аватара пользователя (на основе логина)
+  // временный костыль
+  const usersMap = {
+    1: "testuser",
+    5: "space_explorer", 
+    7: "auto_expert",
+    9: "code_ninja",
+    11: "bio_researcher",
+    13: "alice_12" 
+  };
+
   const getAvatarUrl = (login) => {
-    // Генерируем уникальный аватар на основе логина через UI Avatars
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
   };
 
@@ -25,8 +33,15 @@ function Home() {
     if (loading || !hasMore) return;
     setLoading(true);
     try {
-      const response = await postsAPI.getRecommendations(page, 5);
-      const newPosts = response.data.recommendations || [];
+      const response = await postsAPI.getRecommendations();
+      let newPosts = response.data?.recommendations || [];
+      
+      // Добавляем author_login, если его нет
+      newPosts = newPosts.map(post => ({
+        ...post,
+        author_login: post.author_login || usersMap[post.author_id] || `user_${post.author_id}`
+      }));
+      
       if (newPosts.length < 5) setHasMore(false);
       setPosts(prev => [...prev, ...newPosts]);
       setPage(prev => prev + 1);
@@ -35,7 +50,7 @@ function Home() {
     } finally {
       setLoading(false);
     }
-  }, [page, loading, hasMore]);
+  }, [loading, hasMore]);
 
   useEffect(() => {
     loadPosts();
@@ -52,17 +67,42 @@ function Home() {
   }, [loadPosts]);
 
   const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
+    console.log('=== START handleCreatePost ===');
+    console.log('1. newPostContent:', newPostContent);
+    
+    if (!newPostContent.trim()) {
+      console.log('2. Content empty, returning');
+      return;
+    }
+    
     try {
-      await postsAPI.createPost(newPostContent);
+      console.log('3. Getting token from localStorage...');
+      const token = localStorage.getItem('access_token');
+      console.log('4. Token exists:', !!token);
+      console.log('5. Token value:', token ? token.substring(0, 50) + '...' : 'null');
+      
+      console.log('6. Calling postsAPI.createPost...');
+      const response = await postsAPI.createPost(newPostContent);
+      console.log('7. Response:', response);
+      console.log('8. Response data:', response.data);
+      
+      console.log('9. Clearing state...');
       setNewPostContent('');
       setShowCreateModal(false);
       setPosts([]);
       setPage(1);
       setHasMore(true);
-      loadPosts();
+      
+      console.log('10. Reloading posts...');
+      await loadPosts();
+      console.log('=== SUCCESS ===');
     } catch (error) {
-      alert('Error creating post');
+      console.error('=== ERROR ===');
+      console.error('Error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error status:', error.response?.status);
+      console.error('Error data:', error.response?.data);
+      alert('Error creating post: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -125,7 +165,7 @@ function Home() {
 
   const getTruncatedContent = (content, postId) => {
     if (expandedPosts[postId]) return content;
-    const maxLength = 225; // увеличен с 150 до 225 (в 1.5 раза)
+    const maxLength = 225;
     if (content.length > maxLength) {
       return content.slice(0, maxLength) + '...';
     }
@@ -150,7 +190,6 @@ function Home() {
 
   return (
     <div style={styles.container}>
-      {/* Фиксированный навбар */}
       <div style={styles.navbar}>
         <div style={styles.navbarContent}>
           <div style={styles.logoContainer}>
@@ -197,7 +236,6 @@ function Home() {
       <div style={styles.navbarSpacer}></div>
 
       <div style={styles.main}>
-        {/* Поле для создания поста */}
         <div style={styles.createPostCard}>
           <div style={styles.createPostHeader}>
             <div style={styles.createPostAvatar}>
@@ -217,10 +255,9 @@ function Home() {
           </div>
         </div>
 
-        {/* Лента постов */}
         <div style={styles.feed}>
-          {posts.map(post => (
-            <div key={post.id} id={`post-${post.id}`} style={styles.post}>
+          {posts.map((post, index) => (
+            <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
                 <img 
                   src={getAvatarUrl(post.author_login || 'user')}
@@ -232,7 +269,7 @@ function Home() {
                     onClick={() => navigate(`/user/${post.author_login}`)}
                     style={styles.authorName}
                   >
-                    {post.author_login || 'alice'}
+                    {post.author_login || 'user'}
                   </span>
                   <p style={styles.postContent}>
                     {getTruncatedContent(post.content, post.id)}
@@ -243,8 +280,8 @@ function Home() {
                     </button>
                   )}
                   <div style={styles.tags}>
-                    {post.tags?.map(tag => (
-                      <span key={tag.id} style={styles.tag}>- {tag.name}</span>
+                    {post.tags?.map((tag, tagIndex) => (
+                      <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                     ))}
                   </div>
                   <div style={styles.actions}>
@@ -276,7 +313,6 @@ function Home() {
         {!hasMore && <p style={styles.endMessage}>No more posts</p>}
       </div>
 
-      {/* Модальное окно создания поста */}
       {showCreateModal && (
         <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -306,7 +342,7 @@ function Home() {
 const styles = {
   container: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #FFE6FB 30%, #DDE9FF 100%)', 
+    background: 'linear-gradient(135deg, #FFE6FB 30%, #DDE9FF 100%)',
   },
   navbar: {
     position: 'fixed',
@@ -314,49 +350,49 @@ const styles = {
     left: 0,
     right: 0,
     background: '#92A9E0',
-    padding: '23px 39px', 
+    padding: '23px 39px',
     borderBottom: '2px solid #9EABC3',
     zIndex: 1000,
   },
   navbarSpacer: {
-    height: '136px', 
+    height: '136px',
   },
   navbarContent: {
-    maxWidth: '1755px', 
+    maxWidth: '1755px',
     margin: '0 auto',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: '39px', 
+    gap: '39px',
   },
   logoContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px', 
+    gap: '16px',
   },
   logoText: {
     fontFamily: "'Irish Grover', cursive",
-    fontSize: '47px', 
+    fontSize: '47px',
     color: '#FFFFFF',
-    textShadow: '4px 4px 0 #304069', 
+    textShadow: '4px 4px 0 #304069',
   },
   logoMonster: {
-    width: '58px', 
+    width: '58px',
     height: '58px',
     objectFit: 'contain',
   },
   searchContainer: {
     position: 'relative',
     flex: 1,
-    maxWidth: '585px', 
+    maxWidth: '585px',
   },
   searchInput: {
     width: '100%',
-    height: '70px', 
-    padding: '0 29px', 
+    height: '70px',
+    padding: '0 29px',
     border: '2px solid #9EABC3',
-    borderRadius: '39px', 
-    fontSize: '27px', 
+    borderRadius: '39px',
+    fontSize: '27px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#304069',
     background: 'white',
@@ -369,61 +405,61 @@ const styles = {
     right: 0,
     background: 'white',
     border: '2px solid #9EABC3',
-    borderRadius: '23px', 
-    maxHeight: '487px', 
+    borderRadius: '23px',
+    maxHeight: '487px',
     overflowY: 'auto',
     zIndex: 1001,
   },
   searchResultItem: {
-    padding: '19px 23px', 
+    padding: '19px 23px',
     borderBottom: '1px solid #eee',
     cursor: 'pointer',
   },
   searchResultAuthor: {
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '25px', 
+    fontSize: '25px',
     color: '#92A9E0',
     fontWeight: 'bold',
     display: 'block',
-    marginBottom: '8px', 
+    marginBottom: '8px',
   },
   searchResultContent: {
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '21px', 
+    fontSize: '21px',
     color: '#304069',
   },
   navLinks: {
     display: 'flex',
-    gap: '39px', 
+    gap: '39px',
   },
   navLink: {
     background: 'none',
     border: 'none',
-    fontSize: '31px', 
+    fontSize: '31px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#304069',
     cursor: 'pointer',
     fontWeight: 'bold',
   },
   main: {
-    maxWidth: '1170px', 
+    maxWidth: '1170px',
     margin: '0 auto',
-    padding: '29px 39px', 
+    padding: '29px 39px',
   },
   createPostCard: {
     background: 'white',
-    borderRadius: '39px', 
+    borderRadius: '39px',
     border: '2px solid #9EABC3',
-    padding: '23px 39px', 
-    marginBottom: '39px', 
+    padding: '23px 39px',
+    marginBottom: '39px',
   },
   createPostHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '23px', 
+    gap: '23px',
   },
   createPostAvatar: {
-    width: '78px', 
+    width: '78px',
     height: '78px',
     borderRadius: '39px',
     background: 'rgba(159, 158, 195, 0.1)',
@@ -441,10 +477,10 @@ const styles = {
   createPostInput: {
     flex: 1,
     height: '86px',
-    padding: '0 29px', 
+    padding: '0 29px',
     border: '2px solid #9EABC3',
-    borderRadius: '58px', 
-    fontSize: '29px', 
+    borderRadius: '58px',
+    fontSize: '29px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#304069',
     background: '#f9f9f9',
@@ -453,20 +489,20 @@ const styles = {
   feed: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '39px', 
+    gap: '39px',
   },
   post: {
     background: 'white',
-    padding: '29px', 
-    borderRadius: '39px', 
+    padding: '29px',
+    borderRadius: '39px',
     border: '2px solid #9EABC3',
   },
   postHeader: {
     display: 'flex',
-    gap: '23px', 
+    gap: '23px',
   },
   avatar: {
-    width: '94px', 
+    width: '94px',
     height: '94px',
     borderRadius: '47px',
     objectFit: 'cover',
@@ -477,51 +513,51 @@ const styles = {
   },
   authorName: {
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '31px', 
+    fontSize: '31px',
     color: '#92A9E0',
     cursor: 'pointer',
     fontWeight: 'bold',
     display: 'block',
-    marginBottom: '12px', 
+    marginBottom: '12px',
   },
   postContent: {
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '29px', 
+    fontSize: '29px',
     color: '#304069',
     lineHeight: '1.5',
-    marginBottom: '12px', 
+    marginBottom: '12px',
   },
   readMore: {
     background: 'none',
     border: 'none',
-    fontSize: '25px', 
+    fontSize: '25px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#92A9E0',
     cursor: 'pointer',
-    marginBottom: '16px', 
+    marginBottom: '16px',
     padding: 0,
   },
   tags: {
     display: 'flex',
-    gap: '19px', 
+    gap: '19px',
     flexWrap: 'wrap',
-    marginBottom: '19px', 
+    marginBottom: '19px',
   },
   tag: {
-    fontSize: '25px', 
+    fontSize: '25px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#92A9E0',
   },
   actions: {
     display: 'flex',
-    gap: '39px', 
-    paddingTop: '16px', 
+    gap: '39px',
+    paddingTop: '16px',
     borderTop: '1px solid #9EABC3',
   },
   actionButton: {
     background: 'none',
     border: 'none',
-    fontSize: '29px', 
+    fontSize: '29px',
     fontFamily: "'IM Fell French Canon', serif",
     cursor: 'pointer',
     display: 'flex',
@@ -530,16 +566,16 @@ const styles = {
   },
   loading: {
     textAlign: 'center',
-    padding: '39px', 
+    padding: '39px',
     fontFamily: "'IM Fell French Canon', serif",
     fontSize: '29px',
     color: '#9F9EC3',
   },
   endMessage: {
     textAlign: 'center',
-    padding: '39px', 
+    padding: '39px',
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '29px', 
+    fontSize: '29px',
     color: '#9F9EC3',
   },
   modalOverlay: {
@@ -556,37 +592,37 @@ const styles = {
   },
   modal: {
     background: 'white',
-    borderRadius: '58px', 
-    width: '877px', 
+    borderRadius: '58px',
+    width: '877px',
     maxWidth: '90%',
     overflow: 'hidden',
     border: '2px solid #9EABC3',
   },
   modalHeader: {
     background: '#92A9E0',
-    padding: '29px 39px', 
+    padding: '29px 39px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   modalTitle: {
     fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '35px', 
+    fontSize: '35px',
     color: '#304069',
     margin: 0,
   },
   modalClose: {
     background: 'none',
     border: 'none',
-    fontSize: '43px', 
+    fontSize: '43px',
     color: '#304069',
     cursor: 'pointer',
   },
   modalTextarea: {
     width: '100%',
-    padding: '29px', 
+    padding: '29px',
     border: 'none',
-    fontSize: '29px', 
+    fontSize: '29px',
     fontFamily: "'IM Fell French Canon', serif",
     color: '#304069',
     resize: 'vertical',
@@ -596,26 +632,26 @@ const styles = {
   modalActions: {
     display: 'flex',
     justifyContent: 'flex-end',
-    gap: '29px', 
-    padding: '29px 39px', 
+    gap: '29px',
+    padding: '29px 39px',
     borderTop: '1px solid #9EABC3',
   },
   cancelBtn: {
-    padding: '16px 39px', 
+    padding: '16px 39px',
     background: 'white',
     border: '2px solid #9EABC3',
-    borderRadius: '39px', 
-    fontSize: '25px', 
+    borderRadius: '39px',
+    fontSize: '25px',
     fontFamily: "'IM Fell French Canon', serif",
     fontStyle: 'italic',
     color: '#9F9EC3',
     cursor: 'pointer',
   },
   submitPostBtn: {
-    padding: '16px 39px', 
+    padding: '16px 39px',
     background: '#92A9E0',
     border: '2px solid #9EABC3',
-    borderRadius: '39px', 
+    borderRadius: '39px',
     fontSize: '25px',
     fontFamily: "'IM Fell French Canon', serif",
     fontStyle: 'italic',

@@ -11,10 +11,27 @@ function UserProfile() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const navigate = useNavigate();
 
+  // временный костыль
+  const usersMap = {
+    1: "testuser",
+    5: "space_explorer", 
+    7: "auto_expert",
+    9: "code_ninja",
+    11: "bio_researcher",
+    13: "alice_12" 
+  };
+
   const loadUserPosts = useCallback(async () => {
     try {
-      const response = await postsAPI.getUserPostsByLogin(login);
-      setPosts(response.data.posts || []);
+      const response = await postsAPI.getAllPosts();
+      const allPosts = response.data || [];
+      
+      const userPosts = allPosts.filter(post => {
+        const postAuthorLogin = usersMap[post.author_id];
+        return postAuthorLogin === login;
+      });
+      
+      setPosts(userPosts);
     } catch (error) {
       console.error('Error loading user posts:', error);
     } finally {
@@ -99,7 +116,6 @@ function UserProfile() {
 
   return (
     <div style={styles.container}>
-      {/* Навбар как на Home */}
       <div style={styles.navbar}>
         <div style={styles.navbarContent}>
           <div style={styles.logoContainer}>
@@ -145,7 +161,6 @@ function UserProfile() {
       <div style={styles.navbarSpacer}></div>
 
       <div style={styles.main}>
-        {/* Карточка профиля пользователя */}
         <div style={styles.profileCard}>
           <div style={styles.profileHeader}>
             <div style={styles.profileAvatar}>
@@ -156,7 +171,7 @@ function UserProfile() {
               />
             </div>
             <div style={styles.profileInfo}>
-              <h1 style={styles.profileName}>{login === 'alibaba8_8' ? 'Ivan Ivanov' : login}</h1>
+              <h1 style={styles.profileName}>{login}</h1>
               <p style={styles.profileUsername}>@{login}</p>
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
@@ -172,12 +187,11 @@ function UserProfile() {
           </div>
         </div>
 
-        {/* Лента постов пользователя (без возможности создания) */}
         <div style={styles.feed}>
           {loading && <p style={styles.loading}>Loading...</p>}
           
-          {posts.map(post => (
-            <div key={post.id} id={`post-${post.id}`} style={styles.post}>
+          {posts.map((post, index) => (
+            <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img 
@@ -192,8 +206,8 @@ function UserProfile() {
                 {post.content}
               </p>
               <div style={styles.tags}>
-                {post.tags?.map(tag => (
-                  <span key={tag.id} style={styles.tag}>- {tag.name}</span>
+                {post.tags?.map((tag, tagIndex) => (
+                  <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                 ))}
               </div>
               <div style={styles.postFooter}>

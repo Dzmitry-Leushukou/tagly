@@ -10,16 +10,39 @@ function TagSelection() {
 
   useEffect(() => {
     fetchTags();
+    const savedTags = localStorage.getItem('selected_tags');
+    if (savedTags) {
+      try {
+        const parsedTags = JSON.parse(savedTags);
+        setSelectedTags(parsedTags);
+      } catch (e) {
+        console.error('Error parsing saved tags:', e);
+      }
+    }
   }, []);
 
   const fetchTags = async () => {
     try {
-      const response = await tagsAPI.getAllTags();
-      setAllTags(response.data.tags || []);
-      setLoading(false);
+      const response = await tagsAPI.getAllTags(100, 0);
+      let tags = [];
+      if (Array.isArray(response.data)) {
+        tags = response.data;
+      } else if (response.data?.tags && Array.isArray(response.data.tags)) {
+        tags = response.data.tags;
+      } else {
+        tags = Object.values(response.data).find(val => Array.isArray(val)) || [];
+      }
+      
+      if (tags.length > 0 && typeof tags[0] === 'string') {
+        tags = tags.map((name, index) => ({
+          id: index,
+          name: name
+        }));
+      }
+      
+      setAllTags(tags);
     } catch (error) {
       console.error('Error fetching tags:', error);
-     
       const mockTags = [
         { id: 1, name: 'technology' }, { id: 2, name: 'sports' },
         { id: 3, name: 'music' }, { id: 4, name: 'movies' },
@@ -27,6 +50,7 @@ function TagSelection() {
         { id: 7, name: 'science' }, { id: 8, name: 'food' },
       ];
       setAllTags(mockTags);
+    } finally {
       setLoading(false);
     }
   };
@@ -39,9 +63,16 @@ function TagSelection() {
     }
   };
 
-  const handleContinue = () => {
-    localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
-    navigate('/');
+  const handleContinue = async () => {
+    try {
+      const tagIds = selectedTags.map(t => t.id);
+      await tagsAPI.saveUserTags(tagIds);
+      localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
+      navigate('/');
+    } catch (error) {
+      console.error('Error saving tags:', error);
+      navigate('/');
+    }
   };
 
   const handleSkip = () => {
