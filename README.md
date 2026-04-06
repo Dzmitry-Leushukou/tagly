@@ -163,8 +163,8 @@ Base URL: `http://localhost:8001`
 ```
 
 **Response `200`:**
-```json
-{ "login": "username" }
+```
+"username"
 ```
 
 **Errors:**
@@ -223,6 +223,7 @@ Base URL: `http://localhost:8001`
     "content": "Текст поста...",
     "created_at": "2026-04-06T12:00:00",
     "author_id": 1,
+    "author_login": "username",
     "tags": [
       { "id": 1, "name": "python" },
       { "id": 2, "name": "async" }
@@ -402,6 +403,46 @@ Shown post recorded
 
 ---
 
+#### `GET /user/{login}/posts`
+Получить все посты пользователя с пагинацией. Посты отсортированы по дате публикации (новые — первыми).
+
+**Path params:**
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `login` | string | Логин пользователя |
+
+**Query params:**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|-------------|----------|
+| `limit` | int | 20 | Количество постов на странице |
+| `offset` | int | 0 | Смещение |
+
+**Response `200`:**
+```json
+{
+  "posts": [
+    {
+      "id": 10,
+      "content": "Интересный пост...",
+      "created_at": "2026-04-06T12:00:00",
+      "author_id": 2,
+      "author_login": "username",
+      "tags": [
+        { "id": 3, "name": "python" }
+      ]
+    }
+  ],
+  "total": 15,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Errors:**
+- `404` — User not found
+
+---
+
 ### PostService
 Base URL: `http://localhost:8002`
 
@@ -441,7 +482,7 @@ Authorization: Bearer <access_token>
 - **Exploitation** (по умолчанию 4) — посты, релевантные preference_vector
 - **Exploration** (по умолчанию 1) — случайные посты для разнообразия
 
-**Headers:**
+**Headers (опционально):**
 ```
 Authorization: Bearer <access_token>
 ```
@@ -453,12 +494,19 @@ Authorization: Bearer <access_token>
     {
       "id": 10,
       "content": "Интересный пост...",
+      "created_at": "2026-04-06T12:00:00",
       "author_id": 2,
-      "tags": [{ "id": 3, "name": "python" }]
+      "author_login": "otheruser",
+      "tags": [
+        { "id": 3, "name": "python" }
+      ]
     }
   ]
 }
 ```
+
+**Errors:**
+- `500` — Failed to get posts
 
 ---
 
@@ -548,6 +596,112 @@ Authorization: Bearer <access_token>
   "tags": ["async", "cars", "python", "space", "sport"]
 }
 ```
+
+---
+
+#### `GET /my-posts`
+Получить все посты текущего авторизованного пользователя. Посты отсортированы по дате публикации (новые — первыми). Поддерживает пагинацию.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Query params:**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|-------------|----------|
+| `limit` | int | 20 | Количество постов на странице |
+| `offset` | int | 0 | Смещение |
+
+**Response `200`:**
+```json
+{
+  "posts": [
+    {
+      "id": 15,
+      "content": "Текст моего поста...",
+      "created_at": "2026-04-06T12:00:00",
+      "author_id": 1,
+      "author_login": "username",
+      "tags": [
+        { "id": 1, "name": "python" },
+        { "id": 2, "name": "fastapi" }
+      ]
+    }
+  ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Errors:**
+- `401` — Missing or invalid token
+- `404` — User not found
+
+---
+
+#### `GET /user/{login}/posts`
+Получить все посты пользователя с указанным логином. Посты отсортированы по дате публикации (новые — первыми). Поддерживает пагинацию. Не требует авторизации.
+
+**Path params:**
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `login` | string | Логин пользователя |
+
+**Query params:**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|-------------|----------|
+| `limit` | int | 20 | Количество постов на странице |
+| `offset` | int | 0 | Смещение |
+
+**Response `200`:**
+```json
+{
+  "posts": [
+    {
+      "id": 10,
+      "content": "Интересный пост...",
+      "created_at": "2026-04-06T12:00:00",
+      "author_id": 2,
+      "author_login": "otheruser",
+      "tags": [
+        { "id": 3, "name": "python" }
+      ]
+    }
+  ],
+  "total": 15,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Errors:**
+- `404` — User not found
+
+---
+
+#### `GET /{login}`
+Получить полную информацию о пользователе по логину. Не требует авторизации.
+
+**Path params:**
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `login` | string | Логин пользователя |
+
+**Response `200`:**
+```json
+{
+  "id": 1,
+  "login": "username",
+  "hashed_password": "$2b$...",
+  "description": "Описание пользователя",
+  "preference_vector": { "python": 0.5, "cars": 0.3 }
+}
+```
+
+**Errors:**
+- `404` — User not found
 
 ---
 

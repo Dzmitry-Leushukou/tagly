@@ -396,3 +396,44 @@ class PostgreService:
         except Exception as e:
             logger.error(f"Error getting all tags: {e}")
             raise
+
+    def get_user_posts_with_tags(self, author_id: int, limit: int = 20, offset: int = 0) -> tuple[list, int]:
+        """Get posts by author with tags, sorted by created_at DESC (newest first).
+        Returns tuple of (posts_list, total_count)"""
+        try:
+            # Get total count
+            count_result = self.execute_query("""
+                SELECT COUNT(*) as total
+                FROM posts
+                WHERE author_id = %s
+            """, (author_id,), fetch_one=True)
+            total_count = count_result["total"] if count_result else 0
+
+            # Get posts with pagination
+            posts = self.execute_query("""
+                SELECT p.id, p.content, p.created_at, p.author_id, u.login as author_login
+                FROM posts p
+                JOIN users u ON p.author_id = u.id
+                WHERE p.author_id = %s
+                ORDER BY p.created_at DESC
+                LIMIT %s OFFSET %s
+            """, (author_id, limit, offset), fetch_all=True)
+
+            result = []
+            for post in posts:
+                tags = self.execute_query("""
+                    SELECT t.id, t.name
+                    FROM tags t
+                    JOIN post_tags pt ON t.id = pt.tag_id
+                    WHERE pt.post_id = %s
+                """, (post["id"],), fetch_all=True)
+
+                post_dict = dict(post)
+                post_dict["tags"] = [dict(tag) for tag in tags] if tags else []
+                result.append(post_dict)
+
+            logger.info(f"Retrieved {len(result)} posts for author_id={author_id} (total={total_count})")
+            return result, total_count
+        except Exception as e:
+            logger.error(f"Error getting user posts with tags: {e}")
+            raise

@@ -467,3 +467,74 @@ async def get_all_tags(limit: int = 50, offset: int = 0):
             tags = await tags_resp.json()
 
     return {"tags": [tag["name"] for tag in tags]}
+
+
+@app.get("/my-posts")
+async def get_my_posts(
+    authorization: str = Header(None),
+    limit: int = 20,
+    offset: int = 0
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = authorization.split(" ", 1)[1]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{AUTH_SERVICE_URL}/verify",
+            headers={"Authorization": f"Bearer {token}"}
+        ) as verify_resp:
+            if verify_resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
+            verify_data = await verify_resp.json()
+            author_login = verify_data.get("login")
+
+        if not author_login:
+            raise HTTPException(status_code=401, detail="Login not found in token")
+
+        async with session.get(
+            f"{DB_SERVICE_URL}/user/{author_login}/posts?limit={limit}&offset={offset}"
+        ) as posts_resp:
+            if posts_resp.status == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if posts_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get posts")
+            data = await posts_resp.json()
+
+    return data
+
+
+@app.get("/user/{login}/posts")
+async def get_user_posts(
+    login: str,
+    limit: int = 20,
+    offset: int = 0
+):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{DB_SERVICE_URL}/user/{login}/posts?limit={limit}&offset={offset}"
+        ) as posts_resp:
+            if posts_resp.status == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if posts_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get posts")
+            data = await posts_resp.json()
+
+    return data
+
+
+@app.get("/{login}")
+async def get_user_info(login: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{DB_SERVICE_URL}/user/{login}") as user_resp:
+            if user_resp.status == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if user_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get user info")
+            user_data = await user_resp.json()
+
+    return user_data

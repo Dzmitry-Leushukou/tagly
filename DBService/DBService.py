@@ -278,4 +278,29 @@ def get_all_tags(limit: int = 50, offset: int = 0):
     except Exception as e:
         logger.error(f"Error getting all tags: {e}")
         raise fastapi.HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/user/{login}/posts")
+def get_user_posts(login: str, limit: int = 20, offset: int = 0):
+    try:
+        user = postgres_service.get_user(login)
+        if not user:
+            raise fastapi.HTTPException(status_code=404, detail="User not found")
+
+        posts, total_count = postgres_service.get_user_posts_with_tags(
+            author_id=user["id"],
+            limit=limit,
+            offset=offset
+        )
+        return {
+            "posts": posts,
+            "total": total_count,
+            "limit": limit,
+            "offset": offset
+        }
+    except fastapi.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user posts: {e}")
+        raise fastapi.HTTPException(status_code=500, detail="Internal server error")
     
