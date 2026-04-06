@@ -258,7 +258,19 @@ async def get_recommendations(authorization: str = Header(None)):
             for post in recommended:
                 await _record_shown_post(session, user_id, post["id"], batch_number)
 
-    return {"recommendations": recommended}
+    # Добавляем author_login в каждый пост
+    result_posts = []
+    for post in recommended:
+        result_posts.append({
+            "id": post["id"],
+            "content": post["content"],
+            "created_at": post["created_at"],
+            "author_id": post["author_id"],
+            "author_login": post.get("author_login"),
+            "tags": post.get("tags", [])
+        })
+
+    return {"recommendations": result_posts}
 
 
 async def _get_shown_posts(session: aiohttp.ClientSession, user_id: int) -> dict:

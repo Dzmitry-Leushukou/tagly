@@ -261,8 +261,9 @@ class PostgreService:
     def get_all_posts_with_tags(self) -> list:
         try:
             posts = self.execute_query("""
-                SELECT p.id, p.content, p.created_at, p.author_id
+                SELECT p.id, p.content, p.created_at, p.author_id, u.login as author_login
                 FROM posts p
+                JOIN users u ON p.author_id = u.id
                 ORDER BY p.created_at DESC
             """, fetch_all=True)
             
