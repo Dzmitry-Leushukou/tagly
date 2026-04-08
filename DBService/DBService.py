@@ -15,11 +15,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-redis_service = RedisService()
-postgres_service = PostgreService()
+redis_service = None
+postgres_service = None
 
 @app.on_event("startup")
 async def startup_event():
+    global redis_service, postgres_service
+    logger.info("Initializing Redis and PostgreSQL services...")
+    redis_service = RedisService()
+    postgres_service = PostgreService()
     logger.info("DBService startup complete - all dependencies initialized")
 
 @app.get("/")
