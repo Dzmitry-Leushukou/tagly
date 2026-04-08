@@ -6,33 +6,20 @@ function Profile() {
   const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState({
-    firstName: '',
-    lastName: '',
+    // firstName: '',
+    // lastName: '',
     username: '',
-    bio: '',
+    // bio: '',
   });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const navigate = useNavigate();
 
-  // временный костыль
-  const usersMap = {
-    1: "testuser",
-    5: "space_explorer", 
-    7: "auto_expert",
-    9: "code_ninja",
-    11: "bio_researcher",
-    13: "alice_12" 
-  };
-
   const loadUserProfile = () => {
-    const firstName = localStorage.getItem('firstName') || 'User';
-    const lastName = localStorage.getItem('lastName') || '';
+    // const firstName = localStorage.getItem('firstName') || 'User';
+    // const lastName = localStorage.getItem('lastName') || '';
     const username = localStorage.getItem('login') || 'user';
-    const bio = localStorage.getItem('bio') || '';
+    // const bio = localStorage.getItem('bio') || '';
     
     setUserData({
       firstName: firstName,
@@ -44,16 +31,8 @@ function Profile() {
 
   const loadUserPosts = async () => {
     try {
-      const response = await postsAPI.getAllPosts();
-      const allPosts = response.data || [];
-      const currentLogin = localStorage.getItem('login');
-      
-      const myPosts = allPosts.filter(post => {
-        const postAuthorLogin = usersMap[post.author_id];
-        return postAuthorLogin === currentLogin;
-      });
-      
-      setUserPosts(myPosts);
+      const response = await postsAPI.getMyPosts(50, 0);
+      setUserPosts(response.data.posts || []);
     } catch (error) {
       console.error('Error loading user posts:', error);
       setUserPosts([]);
@@ -76,29 +55,6 @@ function Profile() {
       loadUserPosts();
     } catch (error) {
       alert('Error creating post');
-    }
-  };
-
-  const handleDeletePost = async (postId) => {
-    if (window.confirm('Are you sure you want to delete this post?')) {
-      try {
-        await postsAPI.deletePost(postId);
-        loadUserPosts();
-      } catch (error) {
-        alert('Error deleting post (endpoint not available yet)');
-      }
-    }
-  };
-
-  const handleEditPost = async (postId, oldContent) => {
-    const newContent = prompt('Edit your post:', oldContent);
-    if (newContent && newContent.trim()) {
-      try {
-        await postsAPI.updatePost(postId, newContent);
-        loadUserPosts();
-      } catch (error) {
-        alert('Error updating post (endpoint not available yet)');
-      }
     }
   };
 
@@ -152,27 +108,11 @@ function Profile() {
     ));
   };
 
-  const handleSearch = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    if (query.length > 1) {
-      const results = userPosts.filter(post => 
-        post.content.toLowerCase().includes(query.toLowerCase()) ||
-        post.tags?.some(tag => tag.name.toLowerCase().includes(query.toLowerCase()))
-      );
-      setSearchResults(results);
-      setShowSearchResults(true);
-    } else {
-      setShowSearchResults(false);
-    }
-  };
-
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
   };
 
   const totalLikes = userPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
-  const fullName = `${userData.firstName} ${userData.lastName}`.trim() || userData.username;
 
   return (
     <div style={styles.container}>
@@ -181,29 +121,6 @@ function Profile() {
           <div style={styles.logoContainer}>
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
-          </div>
-          
-          <div style={styles.searchContainer}>
-            <input
-              type="text"
-              placeholder="Search users or #hashtags..."
-              value={searchQuery}
-              onChange={handleSearch}
-              style={styles.searchInput}
-            />
-            {showSearchResults && searchResults.length > 0 && (
-              <div style={styles.searchResults}>
-                {searchResults.slice(0, 5).map(result => (
-                  <div key={result.id} style={styles.searchResultItem} onClick={() => {
-                    setShowSearchResults(false);
-                    setSearchQuery('');
-                    document.getElementById(`post-${result.id}`)?.scrollIntoView({ behavior: 'smooth' });
-                  }}>
-                    <span style={styles.searchResultContent}>{result.content.slice(0, 75)}...</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div style={styles.navLinks}>
@@ -231,9 +148,7 @@ function Profile() {
               />
             </div>
             <div style={styles.profileInfo}>
-              <h1 style={styles.profileName}>{fullName}</h1>
               <p style={styles.profileUsername}>@{userData.username}</p>
-              {userData.bio && <p style={styles.profileBio}>{userData.bio}</p>}
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
                   <span style={styles.statNumber}>{userPosts.length}</span>
@@ -275,19 +190,11 @@ function Profile() {
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img 
-                    src={getAvatarUrl(userData.username)} 
+                    src={getAvatarUrl(post.author_login || userData.username)} 
                     alt="Avatar"
                     style={styles.postAvatar}
                   />
-                  <span style={styles.postAuthor}>@{userData.username}</span>
-                </div>
-                <div style={styles.postActions}>
-                  <button onClick={() => handleEditPost(post.id, post.content)} style={styles.editButton}>
-                    ✏️ Edit
-                  </button>
-                  <button onClick={() => handleDeletePost(post.id)} style={styles.deleteButton}>
-                    🗑️ Delete
-                  </button>
+                  <span style={styles.postAuthor}>@{post.author_login || userData.username}</span>
                 </div>
               </div>
               <p style={styles.postContent}>
@@ -352,6 +259,7 @@ function Profile() {
     </div>
   );
 }
+
 
 const styles = {
   container: {

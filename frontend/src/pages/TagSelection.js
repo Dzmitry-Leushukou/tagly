@@ -24,14 +24,7 @@ function TagSelection() {
   const fetchTags = async () => {
     try {
       const response = await tagsAPI.getAllTags(100, 0);
-      let tags = [];
-      if (Array.isArray(response.data)) {
-        tags = response.data;
-      } else if (response.data?.tags && Array.isArray(response.data.tags)) {
-        tags = response.data.tags;
-      } else {
-        tags = Object.values(response.data).find(val => Array.isArray(val)) || [];
-      }
+      let tags = response.data?.tags || [];
       
       if (tags.length > 0 && typeof tags[0] === 'string') {
         tags = tags.map((name, index) => ({
