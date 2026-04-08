@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI, userAPI } from '../services/api';
+import { authAPI } from '../services/api';
 
 function Login() {
   const [login, setLogin] = useState('');
@@ -16,22 +16,9 @@ function Login() {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
       localStorage.setItem('login', login);
-      
-      try {
-        const userResponse = await userAPI.getUser(login);
-        const userData = userResponse.data;
-      
-        if (userData.first_name) localStorage.setItem('firstName', userData.first_name);
-        if (userData.last_name) localStorage.setItem('lastName', userData.last_name);
-        if (userData.bio) localStorage.setItem('bio', userData.bio);
-      } catch (err) {
-        console.error('Could not fetch user data:', err);
-        
-        if (!localStorage.getItem('firstName')) {
-          localStorage.setItem('firstName', login);
-          localStorage.setItem('lastName', '');
-        }
-      }
+      // localStorage.setItem('firstName', login);
+      // localStorage.setItem('lastName', '');
+      // localStorage.setItem('bio', '');
       
       navigate('/');
     } catch (error) {
@@ -39,7 +26,6 @@ function Login() {
     }
   };
 
- 
   return (
     <div style={styles.container}>
       <div style={styles.card}>

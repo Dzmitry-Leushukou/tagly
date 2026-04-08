@@ -1,10 +1,7 @@
 import axios from 'axios';
 
-const USE_MOCK = false;
-
 const API_AUTH = 'http://localhost:8000';
 const API_POSTS = 'http://localhost:8002';
-const API_DB = 'http://localhost:8001';
 
 const api = axios.create();
 
@@ -44,25 +41,17 @@ export const authAPI = {
   login: (login, password) => api.post(`${API_AUTH}/auth`, { login, password }),
 };
 
-// Posts API
 export const postsAPI = {
   getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
   createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
   sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
-  getAllPosts: () => api.get(`${API_DB}/posts`),
-  getUserPosts: () => api.get(`${API_DB}/posts`),
-  getUserPostsByLogin: (login) => api.get(`${API_DB}/posts`),
-  deletePost: (post_id) => api.delete(`${API_POSTS}/post/${post_id}`),
-  updatePost: (post_id, content) => api.put(`${API_POSTS}/post/${post_id}`, { content }),
+  getMyPosts: (limit = 20, offset = 0) => api.get(`${API_POSTS}/my-posts?limit=${limit}&offset=${offset}`),
+  getUserPostsByLogin: (login, limit = 20, offset = 0) => api.get(`${API_POSTS}/user/${login}/posts?limit=${limit}&offset=${offset}`),
 };
 
 export const tagsAPI = {
   getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
-};
-
-export const userAPI = {
-  getUser: (login) => api.get(`${API_DB}/user/${login}`),
 };
 
 export default api;

@@ -6,32 +6,12 @@ function UserProfile() {
   const { login } = useParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const navigate = useNavigate();
-
-  // временный костыль
-  const usersMap = {
-    1: "testuser",
-    5: "space_explorer", 
-    7: "auto_expert",
-    9: "code_ninja",
-    11: "bio_researcher",
-    13: "alice_12" 
-  };
 
   const loadUserPosts = useCallback(async () => {
     try {
-      const response = await postsAPI.getAllPosts();
-      const allPosts = response.data || [];
-      
-      const userPosts = allPosts.filter(post => {
-        const postAuthorLogin = usersMap[post.author_id];
-        return postAuthorLogin === login;
-      });
-      
-      setPosts(userPosts);
+      const response = await postsAPI.getUserPostsByLogin(login, 50, 0);
+      setPosts(response.data.posts || []);
     } catch (error) {
       console.error('Error loading user posts:', error);
     } finally {
@@ -93,21 +73,6 @@ function UserProfile() {
     ));
   };
 
-  const handleSearch = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    if (query.length > 1) {
-      const results = posts.filter(post => 
-        post.content.toLowerCase().includes(query.toLowerCase()) ||
-        post.tags?.some(tag => tag.name.toLowerCase().includes(query.toLowerCase()))
-      );
-      setSearchResults(results);
-      setShowSearchResults(true);
-    } else {
-      setShowSearchResults(false);
-    }
-  };
-
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
   };
@@ -121,29 +86,6 @@ function UserProfile() {
           <div style={styles.logoContainer}>
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
-          </div>
-          
-          <div style={styles.searchContainer}>
-            <input
-              type="text"
-              placeholder="Search users or #hashtags..."
-              value={searchQuery}
-              onChange={handleSearch}
-              style={styles.searchInput}
-            />
-            {showSearchResults && searchResults.length > 0 && (
-              <div style={styles.searchResults}>
-                {searchResults.slice(0, 5).map(result => (
-                  <div key={result.id} style={styles.searchResultItem} onClick={() => {
-                    setShowSearchResults(false);
-                    setSearchQuery('');
-                    document.getElementById(`post-${result.id}`)?.scrollIntoView({ behavior: 'smooth' });
-                  }}>
-                    <span style={styles.searchResultContent}>{result.content.slice(0, 75)}...</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div style={styles.navLinks}>
@@ -171,7 +113,6 @@ function UserProfile() {
               />
             </div>
             <div style={styles.profileInfo}>
-              <h1 style={styles.profileName}>{login}</h1>
               <p style={styles.profileUsername}>@{login}</p>
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
@@ -195,11 +136,11 @@ function UserProfile() {
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img 
-                    src={getAvatarUrl(login)} 
+                    src={getAvatarUrl(post.author_login || login)} 
                     alt="Avatar"
                     style={styles.postAvatar}
                   />
-                  <span style={styles.postAuthor}>@{login}</span>
+                  <span style={styles.postAuthor}>@{post.author_login || login}</span>
                 </div>
               </div>
               <p style={styles.postContent}>

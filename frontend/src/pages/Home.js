@@ -4,26 +4,12 @@ import { postsAPI } from '../services/api';
 
 function Home() {
   const [posts, setPosts] = useState([]);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [expandedPosts, setExpandedPosts] = useState({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const navigate = useNavigate();
-
-  // временный костыль
-  const usersMap = {
-    1: "testuser",
-    5: "space_explorer", 
-    7: "auto_expert",
-    9: "code_ninja",
-    11: "bio_researcher",
-    13: "alice_12" 
-  };
 
   const getAvatarUrl = (login) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
@@ -36,15 +22,8 @@ function Home() {
       const response = await postsAPI.getRecommendations();
       let newPosts = response.data?.recommendations || [];
       
-      // Добавляем author_login, если его нет
-      newPosts = newPosts.map(post => ({
-        ...post,
-        author_login: post.author_login || usersMap[post.author_id] || `user_${post.author_id}`
-      }));
-      
       if (newPosts.length < 5) setHasMore(false);
       setPosts(prev => [...prev, ...newPosts]);
-      setPage(prev => prev + 1);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -67,42 +46,16 @@ function Home() {
   }, [loadPosts]);
 
   const handleCreatePost = async () => {
-    console.log('=== START handleCreatePost ===');
-    console.log('1. newPostContent:', newPostContent);
-    
-    if (!newPostContent.trim()) {
-      console.log('2. Content empty, returning');
-      return;
-    }
-    
+    if (!newPostContent.trim()) return;
     try {
-      console.log('3. Getting token from localStorage...');
-      const token = localStorage.getItem('access_token');
-      console.log('4. Token exists:', !!token);
-      console.log('5. Token value:', token ? token.substring(0, 50) + '...' : 'null');
-      
-      console.log('6. Calling postsAPI.createPost...');
-      const response = await postsAPI.createPost(newPostContent);
-      console.log('7. Response:', response);
-      console.log('8. Response data:', response.data);
-      
-      console.log('9. Clearing state...');
+      await postsAPI.createPost(newPostContent);
       setNewPostContent('');
       setShowCreateModal(false);
       setPosts([]);
-      setPage(1);
       setHasMore(true);
-      
-      console.log('10. Reloading posts...');
-      await loadPosts();
-      console.log('=== SUCCESS ===');
+      loadPosts();
     } catch (error) {
-      console.error('=== ERROR ===');
-      console.error('Error object:', error);
-      console.error('Error response:', error.response);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      alert('Error creating post: ' + (error.response?.data?.detail || error.message));
+      alert('Error creating post');
     }
   };
 
@@ -172,22 +125,6 @@ function Home() {
     return content;
   };
 
-  const handleSearch = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    if (query.length > 1) {
-      const results = posts.filter(post => 
-        post.content.toLowerCase().includes(query.toLowerCase()) ||
-        post.tags?.some(tag => tag.name.toLowerCase().includes(query.toLowerCase())) ||
-        post.author_login?.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(results);
-      setShowSearchResults(true);
-    } else {
-      setShowSearchResults(false);
-    }
-  };
-
   return (
     <div style={styles.container}>
       <div style={styles.navbar}>
@@ -195,30 +132,6 @@ function Home() {
           <div style={styles.logoContainer}>
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
-          </div>
-          
-          <div style={styles.searchContainer}>
-            <input
-              type="text"
-              placeholder="Search users or #hashtags..."
-              value={searchQuery}
-              onChange={handleSearch}
-              style={styles.searchInput}
-            />
-            {showSearchResults && searchResults.length > 0 && (
-              <div style={styles.searchResults}>
-                {searchResults.slice(0, 5).map(result => (
-                  <div key={result.id} style={styles.searchResultItem} onClick={() => {
-                    setShowSearchResults(false);
-                    setSearchQuery('');
-                    document.getElementById(`post-${result.id}`)?.scrollIntoView({ behavior: 'smooth' });
-                  }}>
-                    <span style={styles.searchResultAuthor}>@{result.author_login}</span>
-                    <span style={styles.searchResultContent}>{result.content.slice(0, 75)}...</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div style={styles.navLinks}>
@@ -338,6 +251,7 @@ function Home() {
     </div>
   );
 }
+
 
 const styles = {
   container: {
