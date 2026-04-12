@@ -258,17 +258,33 @@ async def get_recommendations(authorization: str = Header(None)):
             for post in recommended:
                 await _record_shown_post(session, user_id, post["id"], batch_number)
 
-    # Добавляем author_login в каждый пост
+    # Добавляем author_login и информацию о лайке в каждый пост
     result_posts = []
     for post in recommended:
-        result_posts.append({
+        post_result = {
             "id": post["id"],
             "content": post["content"],
             "created_at": post["created_at"],
             "author_id": post["author_id"],
             "author_login": post.get("author_login"),
-            "tags": post.get("tags", [])
-        })
+            "tags": post.get("tags", []),
+            "user_liked": False,
+            "user_disliked": False
+        }
+        
+        # Если пользователь авторизован, получаем информацию о фидбеке
+        if user_id:
+            try:
+                async with session.get(f"{DB_SERVICE_URL}/user_feedback/{user_id}/{post['id']}") as feedback_resp:
+                    if feedback_resp.status == 200:
+                        feedback_data = await feedback_resp.json()
+                        feedback_type = feedback_data.get("feedback_type")
+                        post_result["user_liked"] = feedback_type == "like"
+                        post_result["user_disliked"] = feedback_type == "dislike"
+            except Exception as e:
+                logger.warning(f"Failed to get feedback for post {post['id']}: {e}")
+        
+        result_posts.append(post_result)
 
     return {"recommendations": result_posts}
 

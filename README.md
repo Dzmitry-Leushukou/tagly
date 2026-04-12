@@ -499,11 +499,19 @@ Authorization: Bearer <access_token>
       "author_login": "otheruser",
       "tags": [
         { "id": 3, "name": "python" }
-      ]
+      ],
+      "user_liked": true,
+      "user_disliked": false
     }
   ]
 }
 ```
+
+Для авторизованных пользователей каждый пост содержит:
+- `user_liked` — `true`, если пользователь лайкнул пост
+- `user_disliked` — `true`, если пользователь дизлайкнул пост
+
+Для неавторизованных пользователей оба поля всегда `false`.
 
 **Errors:**
 - `500` — Failed to get posts
