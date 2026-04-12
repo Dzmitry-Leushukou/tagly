@@ -307,4 +307,23 @@ def get_user_posts(login: str, limit: int = 20, offset: int = 0):
     except Exception as e:
         logger.error(f"Error getting user posts: {e}")
         raise fastapi.HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/user/{login}/favorite_tags")
+def get_user_favorite_tags(login: str, min_weight: float = 0.0):
+    try:
+        user = postgres_service.get_user(login)
+        if not user:
+            raise fastapi.HTTPException(status_code=404, detail="User not found")
+
+        favorite_tags = postgres_service.get_user_favorite_tags(
+            login=login,
+            min_weight=min_weight
+        )
+        return favorite_tags
+    except fastapi.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user favorite tags: {e}")
+        raise fastapi.HTTPException(status_code=500, detail="Internal server error")
     

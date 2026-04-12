@@ -485,6 +485,39 @@ async def get_all_tags(limit: int = 50, offset: int = 0):
     return {"tags": [tag["name"] for tag in tags]}
 
 
+@app.get("/tags/my")
+async def get_my_favorite_tags(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = authorization.split(" ", 1)[1]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{AUTH_SERVICE_URL}/verify",
+            headers={"Authorization": f"Bearer {token}"}
+        ) as verify_resp:
+            if verify_resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
+            verify_data = await verify_resp.json()
+            user_login = verify_data.get("login")
+
+        if not user_login:
+            raise HTTPException(status_code=401, detail="Login not found in token")
+
+        async with session.get(f"{DB_SERVICE_URL}/user/{user_login}/favorite_tags") as tags_resp:
+            if tags_resp.status == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if tags_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get favorite tags")
+            favorite_tags = await tags_resp.json()
+
+    return {"tags": favorite_tags}
+
+
 @app.get("/my-posts")
 async def get_my_posts(
     authorization: str = Header(None),
