@@ -9,76 +9,59 @@ function Home() {
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [expandedPosts, setExpandedPosts] = useState({});
-  const [userId, setUserId] = useState(null);
   const navigate = useNavigate();
 
   const getAvatarUrl = (login) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(login || 'user')}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
   };
 
-  // Получаем ID текущего пользователя
-  useEffect(() => {
-    const fetchUserId = async () => {
+  const loadPosts = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    try {
+      const response = await postsAPI.getRecommendations();
+      let newPosts = response.data?.recommendations || [];
+      
       const login = localStorage.getItem('login');
+      let userId = null;
+      
       if (login) {
         try {
-          const response = await fetch(`http://localhost:8001/user/${login}`);
-          const user = await response.json();
-          setUserId(user.id);
-        } catch (error) {
-          console.error('Error fetching user ID:', error);
-        }
-      }
-    };
-    fetchUserId();
-  }, []);
-
-const loadPosts = useCallback(async () => {
-  if (loading || !hasMore) return;
-  setLoading(true);
-  try {
-    const response = await postsAPI.getRecommendations();
-    let newPosts = response.data?.recommendations || [];
-    
-    // Получаем ID текущего пользователя
-    const login = localStorage.getItem('login');
-    let userId = null;
-    if (login) {
-      const userRes = await fetch(`http://localhost:8001/user/${login}`);
-      const user = await userRes.json();
-      userId = user.id;
-    }
-    
-    // Загружаем лайки для каждого поста
-    const postsWithLikes = await Promise.all(newPosts.map(async (post) => {
-      if (userId) {
-        try {
-          const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
-          if (feedbackRes.ok) {
-            const feedback = await feedbackRes.json();
-            return { 
-              ...post, 
-              user_liked: feedback.feedback_type === 'like',
-              user_disliked: feedback.feedback_type === 'dislike',
-              likes: post.likes || 0,
-              dislikes: post.dislikes || 0
-            };
-          }
+          const userRes = await fetch(`http://localhost:8001/user/${login}`);
+          const user = await userRes.json();
+          userId = user.id;
         } catch (e) {
-          console.error('Error loading feedback for post', post.id, e);
+          console.error('Error getting user ID:', e);
         }
       }
-      return { ...post, user_liked: false, user_disliked: false, likes: post.likes || 0, dislikes: post.dislikes || 0 };
-    }));
-    
-    if (postsWithLikes.length < 5) setHasMore(false);
-    setPosts(prev => [...prev, ...postsWithLikes]);
-  } catch (error) {
-    console.error('Error loading posts:', error);
-  } finally {
-    setLoading(false);
-  }
-}, [loading, hasMore]);
+      
+      const postsWithLikes = await Promise.all(newPosts.map(async (post) => {
+        if (userId) {
+          try {
+            const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
+            if (feedbackRes.ok) {
+              const feedback = await feedbackRes.json();
+              return {
+                ...post,
+                user_liked: feedback.feedback_type === 'like',
+                likes: post.likes || 0
+              };
+            }
+          } catch (e) {
+            console.error('Error loading feedback for post', post.id, e);
+          }
+        }
+        return { ...post, user_liked: false, likes: post.likes || 0 };
+      }));
+      
+      if (postsWithLikes.length < 5) setHasMore(false);
+      setPosts(prev => [...prev, ...postsWithLikes]);
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, hasMore]);
 
   useEffect(() => {
     loadPosts();
@@ -110,41 +93,22 @@ const loadPosts = useCallback(async () => {
 
   const handleLike = async (postId) => {
     const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    
     const newLiked = !post.user_liked;
     const newLikes = newLiked ? (post.likes || 0) + 1 : (post.likes || 0) - 1;
-    
-    // Обновляем UI сразу
     setPosts(posts.map(p => 
       p.id === postId ? { ...p, user_liked: newLiked, likes: newLikes } : p
     ));
     
-    // Отправляем на бэкенд
     try {
       await postsAPI.sendFeedback(postId, newLiked ? 'like' : 'dislike');
+      console.log(`Post ${postId} ${newLiked ? 'liked' : 'disliked'} successfully`);
     } catch (error) {
-      console.error('Error sending like:', error);
-      // Откатываем UI при ошибке
+      console.error('Error sending feedback:', error);
+      
       setPosts(posts.map(p => 
         p.id === postId ? { ...p, user_liked: post.user_liked, likes: post.likes } : p
-      ));
-    }
-  };
-
-  const handleDislike = async (postId) => {
-    const post = posts.find(p => p.id === postId);
-    const newDisliked = !post.user_disliked;
-    const newDislikes = newDisliked ? (post.dislikes || 0) + 1 : (post.dislikes || 0) - 1;
-    
-    setPosts(posts.map(p => 
-      p.id === postId ? { ...p, user_disliked: newDisliked, dislikes: newDislikes } : p
-    ));
-    
-    try {
-      await postsAPI.sendFeedback(postId, newDisliked ? 'dislike' : 'like');
-    } catch (error) {
-      console.error('Error sending dislike:', error);
-      setPosts(posts.map(p => 
-        p.id === postId ? { ...p, user_disliked: post.user_disliked, dislikes: post.dislikes } : p
       ));
     }
   };
@@ -162,7 +126,6 @@ const loadPosts = useCallback(async () => {
     return content;
   };
 
-  
   return (
     <div style={styles.container}>
       <div style={styles.navbar}>
@@ -210,11 +173,14 @@ const loadPosts = useCallback(async () => {
                     ))}
                   </div>
                   <div style={styles.actions}>
-                    <button onClick={() => handleLike(post.id)} style={{ ...styles.actionButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
+                    <button 
+                      onClick={() => handleLike(post.id)} 
+                      style={{
+                        ...styles.actionButton,
+                        color: post.user_liked ? '#ff4444' : '#9F9EC3'
+                      }}
+                    >
                       ❤️ {post.likes || 0}
-                    </button>
-                    <button onClick={() => handleDislike(post.id)} style={{ ...styles.actionButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
-                      💔 {post.dislikes || 0}
                     </button>
                   </div>
                 </div>
@@ -243,6 +209,8 @@ const loadPosts = useCallback(async () => {
     </div>
   );
 }
+
+
 
 const styles = {
   container: {

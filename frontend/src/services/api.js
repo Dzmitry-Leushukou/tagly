@@ -37,37 +37,25 @@ api.interceptors.response.use(
   }
 );
 
+
 export const authAPI = {
   register: (login, password) => api.post(`${API_AUTH}/register`, { login, password }),
   login: (login, password) => api.post(`${API_AUTH}/auth`, { login, password }),
 };
 
-// export const postsAPI = {
-//   getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
-//   createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
-//   sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
-//   getMyPosts: (limit = 20, offset = 0) => api.get(`${API_POSTS}/my-posts?limit=${limit}&offset=${offset}`),
-//   getUserPostsByLogin: (login, limit = 20, offset = 0) => api.get(`${API_POSTS}/user/${login}/posts?limit=${limit}&offset=${offset}`),
-// };
-
-// export const tagsAPI = {
-//   getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
-//   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
-// };
-
-
 export const postsAPI = {
-  sendFeedback: async (post_id, feedback_type) => {
-    console.log('Sending feedback:', { post_id, feedback_type });
-    const response = await api.post(`${API_POSTS}/feedback`, { post_id, feedback_type });
-    console.log('Feedback response:', response.data);
-    return response;
-  },
+  getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
+  createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
+  sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
+  getMyPosts: (limit = 20, offset = 0) => api.get(`${API_POSTS}/my-posts?limit=${limit}&offset=${offset}`),
+  getUserPostsByLogin: (login, limit = 20, offset = 0) => api.get(`${API_POSTS}/user/${login}/posts?limit=${limit}&offset=${offset}`),
 };
 
 export const tagsAPI = {
+  getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
+  getMyFavoriteTags: () => api.get(`${API_POSTS}/tags/my`),
+  getUserFavoriteTags: (login, minWeight = 0.0) => api.get(`${API_DB}/user/${login}/favorite_tags?min_weight=${minWeight}`),
 };
+
 export default api;
-
-

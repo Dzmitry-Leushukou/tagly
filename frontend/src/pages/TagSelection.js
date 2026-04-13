@@ -10,7 +10,6 @@ function TagSelection() {
 
 useEffect(() => {
   fetchTags();
-  // Загружаем сохранённые теги из localStorage
   const savedTags = localStorage.getItem('selected_tags');
   if (savedTags) {
     try {
@@ -20,6 +19,41 @@ useEffect(() => {
       console.error('Error parsing saved tags:', e);
     }
   }
+}, []);
+
+
+const loadSelectedTags = async () => {
+  try {
+    const response = await tagsAPI.getMyFavoriteTags();
+    const favoriteTags = response.data.tags || [];
+    
+    const selected = favoriteTags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      weight: tag.weight
+    }));
+    
+    setSelectedTags(selected);
+    localStorage.setItem('selected_tags', JSON.stringify(selected));
+    console.log('Loaded favorite tags from backend:', selected);
+  } catch (error) {
+    console.error('Error loading favorite tags:', error);
+    
+    const savedTags = localStorage.getItem('selected_tags');
+    if (savedTags) {
+      setSelectedTags(JSON.parse(savedTags));
+    }
+  }
+};
+
+useEffect(() => {
+  const loadData = async () => {
+    setLoading(true);
+    await fetchTags();
+    await loadSelectedTags();  
+    setLoading(false);
+  };
+  loadData();
 }, []);
 
   const fetchTags = async () => {
@@ -44,10 +78,9 @@ useEffect(() => {
     }
   };
 const handleContinue = async () => {
-  // Сохраняем в localStorage
+
   localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
   
-  // Отправляем на бэкенд с правильными ID
   if (selectedTags.length > 0) {
     try {
       const tagIds = selectedTags.map(t => t.id);
@@ -61,10 +94,8 @@ const handleContinue = async () => {
   navigate('/');
 };
 
-// Должна быть загрузка при монтировании компонента
 useEffect(() => {
   fetchTags();
-  // Загружаем из localStorage
   const savedTags = localStorage.getItem('selected_tags');
   if (savedTags) {
     try {

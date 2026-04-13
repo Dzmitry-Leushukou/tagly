@@ -40,29 +40,25 @@ function Profile() {
   };
 
   const handleLike = async (postId) => {
-    const post = userPosts.find(p => p.id === postId);
-    if (post.user_liked) {
-      setUserPosts(userPosts.map(p => 
-        p.id === postId ? {...p, user_liked: false, likes: (p.likes || 0) - 1} : p
-      ));
-      return;
-    }
-    if (post.user_disliked) {
-      setUserPosts(userPosts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: true, 
-          user_disliked: false, 
-          likes: (p.likes || 0) + 1, 
-          dislikes: (p.dislikes || 0) - 1
-        } : p
-      ));
-      return;
-    }
+  const post = userPosts.find(p => p.id === postId);
+  if (!post) return;
+  
+  const newLiked = !post.user_liked;
+  const newLikes = newLiked ? (post.likes || 0) + 1 : (post.likes || 0) - 1;
+  
+  setUserPosts(userPosts.map(p => 
+    p.id === postId ? { ...p, user_liked: newLiked, likes: newLikes } : p
+  ));
+ 
+  try {
+    await postsAPI.sendFeedback(postId, newLiked ? 'like' : 'dislike');
+  } catch (error) {
+    console.error('Error sending feedback:', error);
     setUserPosts(userPosts.map(p => 
-      p.id === postId ? {...p, user_liked: true, likes: (p.likes || 0) + 1} : p
+      p.id === postId ? { ...p, user_liked: post.user_liked, likes: post.likes } : p
     ));
-  };
+  }
+};
 
   const handleDislike = async (postId) => {
     const post = userPosts.find(p => p.id === postId);
