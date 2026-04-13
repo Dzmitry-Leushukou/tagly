@@ -437,3 +437,50 @@ class PostgreService:
         except Exception as e:
             logger.error(f"Error getting user posts with tags: {e}")
             raise
+
+    def get_user_favorite_tags(self, login: str, min_weight: float = 0.0) -> list:
+        """Get tags with positive weights from user's preference_vector.
+        Returns list of {id, name, weight} for tags with weight > min_weight."""
+        try:
+            # Get user's preference vector
+            user = self.get_user(login)
+            if not user:
+                return []
+
+            pref_vector = user.get("preference_vector", {})
+            if not pref_vector:
+                return []
+
+            # Filter tags by minimum weight
+            favorite_tag_names = [
+                tag_name for tag_name, weight in pref_vector.items()
+                if weight > min_weight
+            ]
+
+            if not favorite_tag_names:
+                return []
+
+            # Get tag IDs for the favorite tag names
+            placeholders = ','.join(['%s'] * len(favorite_tag_names))
+            tags = self.execute_query(
+                f"""
+                    SELECT t.id, t.name, %s::jsonb->t.name as weight
+                    FROM tags t
+                    WHERE t.name IN ({placeholders})
+                    ORDER BY t.name
+                """,
+                [json.dumps(pref_vector)] + favorite_tag_names,
+                fetch_all=True
+            )
+
+            result = []
+            for tag in tags:
+                tag_dict = dict(tag)
+                tag_dict["weight"] = float(tag_dict.get("weight", 0))
+                result.append(tag_dict)
+
+            logger.info(f"Retrieved {len(result)} favorite tags for user {login}")
+            return result
+        except Exception as e:
+            logger.error(f"Error getting user favorite tags: {e}")
+            return []

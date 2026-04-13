@@ -443,6 +443,33 @@ Shown post recorded
 
 ---
 
+#### `GET /user/{login}/favorite_tags`
+Получить избранные теги пользователя (теги с положительными весами из `preference_vector`).
+
+**Path params:**
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `login` | string | Логин пользователя |
+
+**Query params (опционально):**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|-------------|----------|
+| `min_weight` | float | 0.0 | Минимальный вес тега для включения |
+
+**Response `200`:**
+```json
+[
+  { "id": 1, "name": "python", "weight": 0.5 },
+  { "id": 3, "name": "async", "weight": 0.3 },
+  { "id": 5, "name": "fastapi", "weight": 0.8 }
+]
+```
+
+**Errors:**
+- `404` — User not found
+
+---
+
 ### PostService
 Base URL: `http://localhost:8002`
 
@@ -499,11 +526,19 @@ Authorization: Bearer <access_token>
       "author_login": "otheruser",
       "tags": [
         { "id": 3, "name": "python" }
-      ]
+      ],
+      "user_liked": true,
+      "user_disliked": false
     }
   ]
 }
 ```
+
+Для авторизованных пользователей каждый пост содержит:
+- `user_liked` — `true`, если пользователь лайкнул пост
+- `user_disliked` — `true`, если пользователь дизлайкнул пост
+
+Для неавторизованных пользователей оба поля всегда `false`.
 
 **Errors:**
 - `500` — Failed to get posts
@@ -596,6 +631,31 @@ Authorization: Bearer <access_token>
   "tags": ["async", "cars", "python", "space", "sport"]
 }
 ```
+
+---
+
+#### `GET /tags/my`
+Получить избранные теги текущего авторизованного пользователя. Возвращает теги с положительными весами из `preference_vector`.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response `200`:**
+```json
+{
+  "tags": [
+    { "id": 1, "name": "python", "weight": 0.5 },
+    { "id": 3, "name": "async", "weight": 0.3 },
+    { "id": 5, "name": "fastapi", "weight": 0.8 }
+  ]
+}
+```
+
+**Errors:**
+- `401` — Missing or invalid token
+- `404` — User not found
 
 ---
 

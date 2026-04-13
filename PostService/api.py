@@ -258,17 +258,33 @@ async def get_recommendations(authorization: str = Header(None)):
             for post in recommended:
                 await _record_shown_post(session, user_id, post["id"], batch_number)
 
-    # Добавляем author_login в каждый пост
+    # Добавляем author_login и информацию о лайке в каждый пост
     result_posts = []
     for post in recommended:
-        result_posts.append({
+        post_result = {
             "id": post["id"],
             "content": post["content"],
             "created_at": post["created_at"],
             "author_id": post["author_id"],
             "author_login": post.get("author_login"),
-            "tags": post.get("tags", [])
-        })
+            "tags": post.get("tags", []),
+            "user_liked": False,
+            "user_disliked": False
+        }
+        
+        # Если пользователь авторизован, получаем информацию о фидбеке
+        if user_id:
+            try:
+                async with session.get(f"{DB_SERVICE_URL}/user_feedback/{user_id}/{post['id']}") as feedback_resp:
+                    if feedback_resp.status == 200:
+                        feedback_data = await feedback_resp.json()
+                        feedback_type = feedback_data.get("feedback_type")
+                        post_result["user_liked"] = feedback_type == "like"
+                        post_result["user_disliked"] = feedback_type == "dislike"
+            except Exception as e:
+                logger.warning(f"Failed to get feedback for post {post['id']}: {e}")
+        
+        result_posts.append(post_result)
 
     return {"recommendations": result_posts}
 
@@ -467,6 +483,39 @@ async def get_all_tags(limit: int = 50, offset: int = 0):
             tags = await tags_resp.json()
 
     return {"tags": [tag["name"] for tag in tags]}
+
+
+@app.get("/tags/my")
+async def get_my_favorite_tags(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = authorization.split(" ", 1)[1]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{AUTH_SERVICE_URL}/verify",
+            headers={"Authorization": f"Bearer {token}"}
+        ) as verify_resp:
+            if verify_resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
+            verify_data = await verify_resp.json()
+            user_login = verify_data.get("login")
+
+        if not user_login:
+            raise HTTPException(status_code=401, detail="Login not found in token")
+
+        async with session.get(f"{DB_SERVICE_URL}/user/{user_login}/favorite_tags") as tags_resp:
+            if tags_resp.status == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if tags_resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to get favorite tags")
+            favorite_tags = await tags_resp.json()
+
+    return {"tags": favorite_tags}
 
 
 @app.get("/my-posts")
