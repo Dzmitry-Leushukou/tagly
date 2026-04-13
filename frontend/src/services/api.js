@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const API_AUTH = 'http://localhost:8000';
 const API_POSTS = 'http://localhost:8002';
+const API_DB = 'http://localhost:8001';
 
 const api = axios.create();
 
@@ -41,17 +42,32 @@ export const authAPI = {
   login: (login, password) => api.post(`${API_AUTH}/auth`, { login, password }),
 };
 
+// export const postsAPI = {
+//   getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
+//   createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
+//   sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
+//   getMyPosts: (limit = 20, offset = 0) => api.get(`${API_POSTS}/my-posts?limit=${limit}&offset=${offset}`),
+//   getUserPostsByLogin: (login, limit = 20, offset = 0) => api.get(`${API_POSTS}/user/${login}/posts?limit=${limit}&offset=${offset}`),
+// };
+
+// export const tagsAPI = {
+//   getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
+//   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
+// };
+
+
 export const postsAPI = {
-  getRecommendations: () => api.get(`${API_POSTS}/recommendations`),
-  createPost: (content) => api.post(`${API_POSTS}/post`, { content }),
-  sendFeedback: (post_id, feedback_type) => api.post(`${API_POSTS}/feedback`, { post_id, feedback_type }),
-  getMyPosts: (limit = 20, offset = 0) => api.get(`${API_POSTS}/my-posts?limit=${limit}&offset=${offset}`),
-  getUserPostsByLogin: (login, limit = 20, offset = 0) => api.get(`${API_POSTS}/user/${login}/posts?limit=${limit}&offset=${offset}`),
+  sendFeedback: async (post_id, feedback_type) => {
+    console.log('Sending feedback:', { post_id, feedback_type });
+    const response = await api.post(`${API_POSTS}/feedback`, { post_id, feedback_type });
+    console.log('Feedback response:', response.data);
+    return response;
+  },
 };
 
 export const tagsAPI = {
-  getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
 };
-
 export default api;
+
+

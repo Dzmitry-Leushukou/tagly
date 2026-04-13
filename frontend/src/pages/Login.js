@@ -16,13 +16,9 @@ function Login() {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
       localStorage.setItem('login', login);
-      // localStorage.setItem('firstName', login);
-      // localStorage.setItem('lastName', '');
-      // localStorage.setItem('bio', '');
-      
       navigate('/');
     } catch (error) {
-      setError('Ошибка входа. Проверьте логин и пароль.');
+      setError('Invalid login or password');
     }
   };
 
@@ -33,7 +29,6 @@ function Login() {
           <span style={styles.loginTitle}>log in to </span>
           <span style={styles.taglyTitle}>Tagly</span>
         </div>
-
         <form onSubmit={handleSubmit}>
           <div style={styles.inputWrapper}>
             <input
@@ -44,7 +39,6 @@ function Login() {
               style={styles.input}
             />
           </div>
-          
           <div style={styles.inputWrapper}>
             <input
               type="password"
@@ -54,26 +48,15 @@ function Login() {
               style={styles.input}
             />
           </div>
-          
           {error && <p style={styles.errorText}>{error}</p>}
-          
           <div style={styles.submitWrapper}>
             <button type="submit" style={styles.submitBtn}>submit</button>
           </div>
         </form>
-        
         <div style={styles.bottomButtonsContainer}>
           <button style={styles.resetBtn}>reset password</button>
           <button style={styles.signupBtn} onClick={() => navigate('/register')}>sign up</button>
         </div>
-      </div>
-      
-      <div style={styles.monsterContainer}>
-        <img 
-          src="/images/monster.png"
-          alt="Monster"
-          style={styles.monster}
-        />
       </div>
     </div>
   );

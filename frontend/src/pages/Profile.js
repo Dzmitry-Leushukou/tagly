@@ -5,44 +5,25 @@ import { postsAPI } from '../services/api';
 function Profile() {
   const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState({
-    // firstName: '',
-    // lastName: '',
-    username: '',
-    // bio: '',
-  });
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const navigate = useNavigate();
 
-  const loadUserProfile = () => {
-    // const firstName = localStorage.getItem('firstName') || 'User';
-    // const lastName = localStorage.getItem('lastName') || '';
-    const username = localStorage.getItem('login') || 'user';
-    // const bio = localStorage.getItem('bio') || '';
-    
-    setUserData({
-      firstName: firstName,
-      lastName: lastName,
-      username: username,
-      bio: bio,
-    });
-  };
+  const username = localStorage.getItem('login') || 'user';
 
   const loadUserPosts = async () => {
-    try {
-      const response = await postsAPI.getMyPosts(50, 0);
-      setUserPosts(response.data.posts || []);
-    } catch (error) {
-      console.error('Error loading user posts:', error);
-      setUserPosts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+  try {
+    const response = await postsAPI.getMyPosts(50, 0);
+    setUserPosts(response.data.posts || []);
+  } catch (error) {
+    console.error('Error loading user posts:', error);
+    setUserPosts([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
   useEffect(() => {
-    loadUserProfile();
     loadUserPosts();
   }, []);
 
@@ -122,33 +103,23 @@ function Profile() {
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
           </div>
-
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
             <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
-            <button onClick={() => {
-              localStorage.clear();
-              navigate('/login');
-            }} style={styles.navLink}>Logout</button>
+            <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>
       </div>
-
       <div style={styles.navbarSpacer}></div>
-
       <div style={styles.main}>
         <div style={styles.profileCard}>
           <div style={styles.profileHeader}>
             <div style={styles.profileAvatar}>
-              <img 
-                src={getAvatarUrl(userData.username)} 
-                alt="Profile"
-                style={styles.avatarImage}
-              />
+              <img src={getAvatarUrl(username)} alt="Profile" style={styles.avatarImage} />
             </div>
             <div style={styles.profileInfo}>
-              <p style={styles.profileUsername}>@{userData.username}</p>
+              <p style={styles.profileUsername}>@{username}</p>
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
                   <span style={styles.statNumber}>{userPosts.length}</span>
@@ -162,78 +133,45 @@ function Profile() {
             </div>
           </div>
         </div>
-
         <div style={styles.createPostCard}>
           <div style={styles.createPostHeader}>
             <div style={styles.createPostAvatar}>
-              <img 
-                src={getAvatarUrl(userData.username)} 
-                alt="Avatar"
-                style={styles.createPostAvatarImg}
-              />
+              <img src={getAvatarUrl(username)} alt="Avatar" style={styles.createPostAvatarImg} />
             </div>
-            <input
-              type="text"
-              placeholder="Create a new post"
-              onClick={() => setShowCreateModal(true)}
-              style={styles.createPostInput}
-              readOnly
-            />
+            <input type="text" placeholder="Create a new post" onClick={() => setShowCreateModal(true)} style={styles.createPostInput} readOnly />
           </div>
         </div>
-
         <div style={styles.feed}>
           {loading && <p style={styles.loading}>Loading...</p>}
-          
           {userPosts.map((post, index) => (
             <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
-                  <img 
-                    src={getAvatarUrl(post.author_login || userData.username)} 
-                    alt="Avatar"
-                    style={styles.postAvatar}
-                  />
-                  <span style={styles.postAuthor}>@{post.author_login || userData.username}</span>
+                  <img src={getAvatarUrl(post.author_login || username)} alt="Avatar" style={styles.postAvatar} />
+                  <span style={styles.postAuthor}>@{post.author_login || username}</span>
                 </div>
               </div>
-              <p style={styles.postContent}>
-                {post.content}
-              </p>
+              <p style={styles.postContent}>{post.content}</p>
               <div style={styles.tags}>
                 {post.tags?.map((tag, tagIndex) => (
                   <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                 ))}
               </div>
               <div style={styles.postFooter}>
-                <button 
-                  onClick={() => handleLike(post.id)} 
-                  style={{
-                    ...styles.likeButton,
-                    color: post.user_liked ? '#ff4444' : '#9F9EC3'
-                  }}
-                >
+                <button onClick={() => handleLike(post.id)} style={{ ...styles.likeButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
                   ❤️ {post.likes || 0}
                 </button>
-                <button 
-                  onClick={() => handleDislike(post.id)} 
-                  style={{
-                    ...styles.dislikeButton,
-                    color: post.user_disliked ? '#ff4444' : '#9F9EC3'
-                  }}
-                >
+                <button onClick={() => handleDislike(post.id)} style={{ ...styles.dislikeButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
                   💔 {post.dislikes || 0}
                 </button>
               </div>
             </div>
           ))}
-          
           {!loading && userPosts.length === 0 && (
             <p style={styles.noPosts}>No posts yet. Create your first post!</p>
           )}
         </div>
       </div>
-
       {showCreateModal && (
         <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -241,14 +179,7 @@ function Profile() {
               <h3 style={styles.modalTitle}>Create a new post</h3>
               <button onClick={() => setShowCreateModal(false)} style={styles.modalClose}>✕</button>
             </div>
-            <textarea
-              placeholder="What's on your mind?"
-              value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              style={styles.modalTextarea}
-              rows="6"
-              autoFocus
-            />
+            <textarea placeholder="What's on your mind?" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} style={styles.modalTextarea} rows="6" autoFocus />
             <div style={styles.modalActions}>
               <button onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancel</button>
               <button onClick={handleCreatePost} style={styles.submitPostBtn}>Post</button>
@@ -259,7 +190,6 @@ function Profile() {
     </div>
   );
 }
-
 
 const styles = {
   container: {

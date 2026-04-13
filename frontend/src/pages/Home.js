@@ -9,27 +9,76 @@ function Home() {
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [expandedPosts, setExpandedPosts] = useState({});
+  const [userId, setUserId] = useState(null);
   const navigate = useNavigate();
 
   const getAvatarUrl = (login) => {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(login)}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(login || 'user')}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
   };
 
-  const loadPosts = useCallback(async () => {
-    if (loading || !hasMore) return;
-    setLoading(true);
-    try {
-      const response = await postsAPI.getRecommendations();
-      let newPosts = response.data?.recommendations || [];
-      
-      if (newPosts.length < 5) setHasMore(false);
-      setPosts(prev => [...prev, ...newPosts]);
-    } catch (error) {
-      console.error('Error loading posts:', error);
-    } finally {
-      setLoading(false);
+  // Получаем ID текущего пользователя
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const login = localStorage.getItem('login');
+      if (login) {
+        try {
+          const response = await fetch(`http://localhost:8001/user/${login}`);
+          const user = await response.json();
+          setUserId(user.id);
+        } catch (error) {
+          console.error('Error fetching user ID:', error);
+        }
+      }
+    };
+    fetchUserId();
+  }, []);
+
+const loadPosts = useCallback(async () => {
+  if (loading || !hasMore) return;
+  setLoading(true);
+  try {
+    const response = await postsAPI.getRecommendations();
+    let newPosts = response.data?.recommendations || [];
+    
+    // Получаем ID текущего пользователя
+    const login = localStorage.getItem('login');
+    let userId = null;
+    if (login) {
+      const userRes = await fetch(`http://localhost:8001/user/${login}`);
+      const user = await userRes.json();
+      userId = user.id;
     }
-  }, [loading, hasMore]);
+    
+    // Загружаем лайки для каждого поста
+    const postsWithLikes = await Promise.all(newPosts.map(async (post) => {
+      if (userId) {
+        try {
+          const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
+          if (feedbackRes.ok) {
+            const feedback = await feedbackRes.json();
+            return { 
+              ...post, 
+              user_liked: feedback.feedback_type === 'like',
+              user_disliked: feedback.feedback_type === 'dislike',
+              likes: post.likes || 0,
+              dislikes: post.dislikes || 0
+            };
+          }
+        } catch (e) {
+          console.error('Error loading feedback for post', post.id, e);
+        }
+      }
+      return { ...post, user_liked: false, user_disliked: false, likes: post.likes || 0, dislikes: post.dislikes || 0 };
+    }));
+    
+    if (postsWithLikes.length < 5) setHasMore(false);
+    setPosts(prev => [...prev, ...postsWithLikes]);
+  } catch (error) {
+    console.error('Error loading posts:', error);
+  } finally {
+    setLoading(false);
+  }
+}, [loading, hasMore]);
 
   useEffect(() => {
     loadPosts();
@@ -61,59 +110,47 @@ function Home() {
 
   const handleLike = async (postId) => {
     const post = posts.find(p => p.id === postId);
-    if (post.user_liked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {...p, user_liked: false, likes: (p.likes || 0) - 1} : p
-      ));
-      return;
-    }
-    if (post.user_disliked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: true, 
-          user_disliked: false, 
-          likes: (p.likes || 0) + 1, 
-          dislikes: (p.dislikes || 0) - 1
-        } : p
-      ));
-      return;
-    }
+    const newLiked = !post.user_liked;
+    const newLikes = newLiked ? (post.likes || 0) + 1 : (post.likes || 0) - 1;
+    
+    // Обновляем UI сразу
     setPosts(posts.map(p => 
-      p.id === postId ? {...p, user_liked: true, likes: (p.likes || 0) + 1} : p
+      p.id === postId ? { ...p, user_liked: newLiked, likes: newLikes } : p
     ));
+    
+    // Отправляем на бэкенд
+    try {
+      await postsAPI.sendFeedback(postId, newLiked ? 'like' : 'dislike');
+    } catch (error) {
+      console.error('Error sending like:', error);
+      // Откатываем UI при ошибке
+      setPosts(posts.map(p => 
+        p.id === postId ? { ...p, user_liked: post.user_liked, likes: post.likes } : p
+      ));
+    }
   };
 
   const handleDislike = async (postId) => {
     const post = posts.find(p => p.id === postId);
-    if (post.user_disliked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {...p, user_disliked: false, dislikes: (p.dislikes || 0) - 1} : p
-      ));
-      return;
-    }
-    if (post.user_liked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: false, 
-          user_disliked: true, 
-          likes: (p.likes || 0) - 1, 
-          dislikes: (p.dislikes || 0) + 1
-        } : p
-      ));
-      return;
-    }
+    const newDisliked = !post.user_disliked;
+    const newDislikes = newDisliked ? (post.dislikes || 0) + 1 : (post.dislikes || 0) - 1;
+    
     setPosts(posts.map(p => 
-      p.id === postId ? {...p, user_disliked: true, dislikes: (p.dislikes || 0) + 1} : p
+      p.id === postId ? { ...p, user_disliked: newDisliked, dislikes: newDislikes } : p
     ));
+    
+    try {
+      await postsAPI.sendFeedback(postId, newDisliked ? 'dislike' : 'like');
+    } catch (error) {
+      console.error('Error sending dislike:', error);
+      setPosts(posts.map(p => 
+        p.id === postId ? { ...p, user_disliked: post.user_disliked, dislikes: post.dislikes } : p
+      ));
+    }
   };
 
   const toggleReadMore = (postId) => {
-    setExpandedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
+    setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
 
   const getTruncatedContent = (content, postId) => {
@@ -125,6 +162,7 @@ function Home() {
     return content;
   };
 
+  
   return (
     <div style={styles.container}>
       <div style={styles.navbar}>
@@ -133,60 +171,34 @@ function Home() {
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
           </div>
-
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
             <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
-            <button onClick={() => {
-              localStorage.clear();
-              navigate('/login');
-            }} style={styles.navLink}>Logout</button>
+            <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>
       </div>
-
       <div style={styles.navbarSpacer}></div>
-
       <div style={styles.main}>
         <div style={styles.createPostCard}>
           <div style={styles.createPostHeader}>
             <div style={styles.createPostAvatar}>
-              <img 
-                src={getAvatarUrl(localStorage.getItem('login') || 'user')} 
-                alt="Avatar"
-                style={styles.createPostAvatarImg}
-              />
+              <img src={getAvatarUrl(localStorage.getItem('login') || 'user')} alt="Avatar" style={styles.createPostAvatarImg} />
             </div>
-            <input
-              type="text"
-              placeholder="Create a new post"
-              onClick={() => setShowCreateModal(true)}
-              style={styles.createPostInput}
-              readOnly
-            />
+            <input type="text" placeholder="Create a new post" onClick={() => setShowCreateModal(true)} style={styles.createPostInput} readOnly />
           </div>
         </div>
-
         <div style={styles.feed}>
           {posts.map((post, index) => (
             <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
-                <img 
-                  src={getAvatarUrl(post.author_login || 'user')}
-                  alt="Avatar"
-                  style={styles.avatar}
-                />
+                <img src={getAvatarUrl(post.author_login)} alt="Avatar" style={styles.avatar} />
                 <div style={styles.postInfo}>
-                  <span 
-                    onClick={() => navigate(`/user/${post.author_login}`)}
-                    style={styles.authorName}
-                  >
+                  <span onClick={() => navigate(`/user/${post.author_login}`)} style={styles.authorName}>
                     {post.author_login || 'user'}
                   </span>
-                  <p style={styles.postContent}>
-                    {getTruncatedContent(post.content, post.id)}
-                  </p>
+                  <p style={styles.postContent}>{getTruncatedContent(post.content, post.id)}</p>
                   {post.content && post.content.length > 225 && (
                     <button onClick={() => toggleReadMore(post.id)} style={styles.readMore}>
                       {expandedPosts[post.id] ? 'Show less' : 'Read more'}
@@ -198,22 +210,10 @@ function Home() {
                     ))}
                   </div>
                   <div style={styles.actions}>
-                    <button 
-                      onClick={() => handleLike(post.id)} 
-                      style={{
-                        ...styles.actionButton,
-                        color: post.user_liked ? '#ff4444' : '#9F9EC3'
-                      }}
-                    >
+                    <button onClick={() => handleLike(post.id)} style={{ ...styles.actionButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
                       ❤️ {post.likes || 0}
                     </button>
-                    <button 
-                      onClick={() => handleDislike(post.id)} 
-                      style={{
-                        ...styles.actionButton,
-                        color: post.user_disliked ? '#ff4444' : '#9F9EC3'
-                      }}
-                    >
+                    <button onClick={() => handleDislike(post.id)} style={{ ...styles.actionButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
                       💔 {post.dislikes || 0}
                     </button>
                   </div>
@@ -225,7 +225,6 @@ function Home() {
         {loading && <p style={styles.loading}>Loading...</p>}
         {!hasMore && <p style={styles.endMessage}>No more posts</p>}
       </div>
-
       {showCreateModal && (
         <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -233,14 +232,7 @@ function Home() {
               <h3 style={styles.modalTitle}>Create a new post</h3>
               <button onClick={() => setShowCreateModal(false)} style={styles.modalClose}>✕</button>
             </div>
-            <textarea
-              placeholder="What's on your mind?"
-              value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              style={styles.modalTextarea}
-              rows="6"
-              autoFocus
-            />
+            <textarea placeholder="What's on your mind?" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} style={styles.modalTextarea} rows="6" autoFocus />
             <div style={styles.modalActions}>
               <button onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancel</button>
               <button onClick={handleCreatePost} style={styles.submitPostBtn}>Post</button>
@@ -251,7 +243,6 @@ function Home() {
     </div>
   );
 }
-
 
 const styles = {
   container: {

@@ -14,6 +14,7 @@ function UserProfile() {
       setPosts(response.data.posts || []);
     } catch (error) {
       console.error('Error loading user posts:', error);
+      setPosts([]);
     } finally {
       setLoading(false);
     }
@@ -87,30 +88,20 @@ function UserProfile() {
             <span style={styles.logoText}>Tagly</span>
             <img src="/images/monster.png" alt="Monster" style={styles.logoMonster} />
           </div>
-
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
             <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
-            <button onClick={() => {
-              localStorage.clear();
-              navigate('/login');
-            }} style={styles.navLink}>Logout</button>
+            <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>
       </div>
-
       <div style={styles.navbarSpacer}></div>
-
       <div style={styles.main}>
         <div style={styles.profileCard}>
           <div style={styles.profileHeader}>
             <div style={styles.profileAvatar}>
-              <img 
-                src={getAvatarUrl(login)} 
-                alt="Profile"
-                style={styles.avatarImage}
-              />
+              <img src={getAvatarUrl(login)} alt="Profile" style={styles.avatarImage} />
             </div>
             <div style={styles.profileInfo}>
               <p style={styles.profileUsername}>@{login}</p>
@@ -127,53 +118,32 @@ function UserProfile() {
             </div>
           </div>
         </div>
-
         <div style={styles.feed}>
           {loading && <p style={styles.loading}>Loading...</p>}
-          
           {posts.map((post, index) => (
             <div key={`${post.id}-${index}`} id={`post-${post.id}`} style={styles.post}>
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
-                  <img 
-                    src={getAvatarUrl(post.author_login || login)} 
-                    alt="Avatar"
-                    style={styles.postAvatar}
-                  />
+                  <img src={getAvatarUrl(post.author_login || login)} alt="Avatar" style={styles.postAvatar} />
                   <span style={styles.postAuthor}>@{post.author_login || login}</span>
                 </div>
               </div>
-              <p style={styles.postContent}>
-                {post.content}
-              </p>
+              <p style={styles.postContent}>{post.content}</p>
               <div style={styles.tags}>
                 {post.tags?.map((tag, tagIndex) => (
                   <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                 ))}
               </div>
               <div style={styles.postFooter}>
-                <button 
-                  onClick={() => handleLike(post.id)} 
-                  style={{
-                    ...styles.likeButton,
-                    color: post.user_liked ? '#ff4444' : '#9F9EC3'
-                  }}
-                >
+                <button onClick={() => handleLike(post.id)} style={{ ...styles.likeButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
                   ❤️ {post.likes || 0}
                 </button>
-                <button 
-                  onClick={() => handleDislike(post.id)} 
-                  style={{
-                    ...styles.dislikeButton,
-                    color: post.user_disliked ? '#ff4444' : '#9F9EC3'
-                  }}
-                >
+                <button onClick={() => handleDislike(post.id)} style={{ ...styles.dislikeButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
                   💔 {post.dislikes || 0}
                 </button>
               </div>
             </div>
           ))}
-          
           {!loading && posts.length === 0 && (
             <p style={styles.noPosts}>No posts yet.</p>
           )}

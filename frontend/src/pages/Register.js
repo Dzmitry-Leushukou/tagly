@@ -11,12 +11,13 @@ function Register() {
     username: '',
     password: '',
     confirmPassword: '',
+    
   });
-  const [photo, setPhoto] = useState(null);
   const [error, setError] = useState('');
   const [usernameAvailable, setUsernameAvailable] = useState(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const navigate = useNavigate();
+  const [photo, setPhoto] = useState(null);
 
   const hasMinLength = form.password.length >= 8;
   const hasNumber = /\d/.test(form.password);
@@ -72,7 +73,6 @@ function Register() {
       localStorage.setItem('login', form.username);
       localStorage.setItem('firstName', form.firstName);
       localStorage.setItem('lastName', form.lastName);
-      localStorage.setItem('bio', '');
       navigate('/tag-selection');
     } catch (error) {
       setError('Registration failed. User may already exist.');
@@ -85,26 +85,24 @@ function Register() {
         <div style={styles.blueShape}>
           <span style={styles.title}>Create your account</span>
         </div>
-
+        <div style={styles.photoSection}>
+        <div style={styles.photoLabel}>Upload a profile photo</div>
+        <div style={styles.photoUpload} onClick={() => document.getElementById('photoInput').click()}>
+          {photo ? (
+            <img src={URL.createObjectURL(photo)} alt="Profile" style={styles.photoPreview} />
+          ) : (
+            <div style={styles.photoPlaceholder}>📷</div>
+          )}
+          <input
+            type="file"
+            id="photoInput"
+            accept="image/*"
+            onChange={(e) => setPhoto(e.target.files[0])}
+            style={styles.hiddenInput}
+          />
+        </div>
+      </div>
         <form onSubmit={handleSubmit}>
-          <div style={styles.photoSection}>
-            <div style={styles.photoUpload} onClick={() => document.getElementById('photoInput').click()}>
-              {photo ? (
-                <img src={URL.createObjectURL(photo)} alt="Profile" style={styles.photoPreview} />
-              ) : (
-                <div style={styles.photoPlaceholder}>📷</div>
-              )}
-              <input
-                type="file"
-                id="photoInput"
-                accept="image/*"
-                onChange={(e) => setPhoto(e.target.files[0])}
-                style={styles.hiddenInput}
-              />
-            </div>
-            <div style={styles.photoLabel}>Upload a profile photo</div>
-          </div>
-
           <div style={styles.nameContainer}>
             <div style={styles.nameContainerLabel}>Enter your name</div>
             <div style={styles.nameRow}>
@@ -212,25 +210,19 @@ function Register() {
                 <span style={hasMinLength ? styles.hintSuccess : styles.hintError}>
                   {hasMinLength ? '✓' : '✘'}
                 </span>
-                <span style={hasMinLength ? styles.hintTextSuccess : styles.hintTextError}>
-                  8+ symbols
-                </span>
+                <span style={hasMinLength ? styles.hintTextSuccess : styles.hintTextError}>8+ symbols</span>
               </div>
               <div style={styles.hintRow}>
                 <span style={hasNumber ? styles.hintSuccess : styles.hintError}>
                   {hasNumber ? '✓' : '✘'}
                 </span>
-                <span style={hasNumber ? styles.hintTextSuccess : styles.hintTextError}>
-                  1 number
-                </span>
+                <span style={hasNumber ? styles.hintTextSuccess : styles.hintTextError}>1 number</span>
               </div>
               <div style={styles.hintRow}>
                 <span style={hasCapital ? styles.hintSuccess : styles.hintError}>
                   {hasCapital ? '✓' : '✘'}
                 </span>
-                <span style={hasCapital ? styles.hintTextSuccess : styles.hintTextError}>
-                  1 capital letter
-                </span>
+                <span style={hasCapital ? styles.hintTextSuccess : styles.hintTextError}>1 capital letter</span>
               </div>
             </div>
           </div>

@@ -8,41 +8,29 @@ function TagSelection() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchTags();
-    const savedTags = localStorage.getItem('selected_tags');
-    if (savedTags) {
-      try {
-        const parsedTags = JSON.parse(savedTags);
-        setSelectedTags(parsedTags);
-      } catch (e) {
-        console.error('Error parsing saved tags:', e);
-      }
+useEffect(() => {
+  fetchTags();
+  // Загружаем сохранённые теги из localStorage
+  const savedTags = localStorage.getItem('selected_tags');
+  if (savedTags) {
+    try {
+      const parsed = JSON.parse(savedTags);
+      setSelectedTags(parsed);
+    } catch(e) {
+      console.error('Error parsing saved tags:', e);
     }
-  }, []);
+  }
+}, []);
 
   const fetchTags = async () => {
     try {
       const response = await tagsAPI.getAllTags(100, 0);
-      let tags = response.data?.tags || [];
-      
-      if (tags.length > 0 && typeof tags[0] === 'string') {
-        tags = tags.map((name, index) => ({
-          id: index,
-          name: name
-        }));
-      }
-      
-      setAllTags(tags);
+      const tags = response.data?.tags || [];
+      const formattedTags = tags.map((name, index) => ({ id: index, name }));
+      setAllTags(formattedTags);
     } catch (error) {
       console.error('Error fetching tags:', error);
-      const mockTags = [
-        { id: 1, name: 'technology' }, { id: 2, name: 'sports' },
-        { id: 3, name: 'music' }, { id: 4, name: 'movies' },
-        { id: 5, name: 'gaming' }, { id: 6, name: 'art' },
-        { id: 7, name: 'science' }, { id: 8, name: 'food' },
-      ];
-      setAllTags(mockTags);
+      setAllTags([]);
     } finally {
       setLoading(false);
     }
@@ -55,33 +43,46 @@ function TagSelection() {
       setSelectedTags([...selectedTags, tag]);
     }
   };
-
-  const handleContinue = async () => {
+const handleContinue = async () => {
+  // Сохраняем в localStorage
+  localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
+  
+  // Отправляем на бэкенд с правильными ID
+  if (selectedTags.length > 0) {
     try {
       const tagIds = selectedTags.map(t => t.id);
       await tagsAPI.saveUserTags(tagIds);
-      localStorage.setItem('selected_tags', JSON.stringify(selectedTags));
-      navigate('/');
+      console.log('Tags saved to backend:', tagIds);
     } catch (error) {
-      console.error('Error saving tags:', error);
-      navigate('/');
+      console.error('Error saving tags to backend:', error);
     }
-  };
+  }
+  
+  navigate('/');
+};
 
+// Должна быть загрузка при монтировании компонента
+useEffect(() => {
+  fetchTags();
+  // Загружаем из localStorage
+  const savedTags = localStorage.getItem('selected_tags');
+  if (savedTags) {
+    try {
+      const parsed = JSON.parse(savedTags);
+      setSelectedTags(parsed);
+      console.log('Loaded saved tags:', parsed);
+    } catch(e) {
+      console.error('Error parsing saved tags:', e);
+    }
+  }
+}, []);
   const handleSkip = () => {
     navigate('/');
   };
 
-  if (loading) return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.blueShape}>
-          <span style={styles.title}>Select your interests</span>
-        </div>
-        <div style={styles.loading}>Loading tags...</div>
-      </div>
-    </div>
-  );
+  if (loading) {
+    return <div style={styles.container}>Loading tags...</div>;
+  }
 
   return (
     <div style={styles.container}>
@@ -89,10 +90,8 @@ function TagSelection() {
         <div style={styles.blueShape}>
           <span style={styles.title}>Select your interests</span>
         </div>
-
         <div style={styles.content}>
           <p style={styles.subtitle}>Choose tags that interest you</p>
-          
           <div style={styles.tagsContainer}>
             {allTags.map(tag => (
               <button
@@ -109,7 +108,6 @@ function TagSelection() {
               </button>
             ))}
           </div>
-
           <div style={styles.buttonGroup}>
             <button onClick={handleSkip} style={styles.skipBtn}>Skip for now</button>
             <button onClick={handleContinue} style={styles.continueBtn}>
