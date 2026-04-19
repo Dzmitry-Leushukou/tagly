@@ -285,38 +285,84 @@ POSTS = {'tractor_enthusiast1': ['Микро-совет по теме «Трак
                           'десять минут и пересобрал план, и проверил на реальном сценарии. Финал порадовал: времени '
                           'на переделки почти не осталось. Именно такой ритм спасает от лишних откатов. #трактор']}
 
-
 def seed_database():
-    """Simulate database seeding without servers."""
-    logger.info("Starting database seeding simulation...")
+    """Register users via Auth Service and create posts via PostService."""
+    logger.info("Starting database seeding via services...")
 
-    # Simulate registering authors
+    auth_url = os.getenv("AUTH_SERVICE_URL", AUTH_SERVICE_URL)
+    post_url = os.getenv("POST_SERVICE_URL", POST_SERVICE_URL)
+
+    # Step 1: Register all authors via Auth Service
     for author in AUTHORS:
-        logger.info(f"Simulating register {author['login']}")
+        try:
+            req = urllib.request.Request(
+                f"{auth_url}/register",
+                data=json.dumps({"login": author["login"], "password": author["password"]}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                logger.info(f"Register {author['login']}: {result}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Register {author['login']}: {e.code} {body}")
+        except Exception as e:
+            logger.warning(f"Register {author['login']} failed: {e}")
 
-    # Collect all posts
-    all_posts = []
+    # Step 2: Login each author and create posts via PostService
     for author in AUTHORS:
         login = author["login"]
+        password = author["password"]
         posts = POSTS.get(login, [])
-        for content in posts:
-            all_posts.append(content)
-            logger.info(f"Simulating post by {login}: {content[:50]}...")
 
-    # Check conditions
-    total_posts = len(all_posts)
-    unique_posts = len(set(all_posts))
-    authors_with_posts = sum(1 for a in AUTHORS if POSTS.get(a["login"], []))
+        token = None
+        try:
+            req = urllib.request.Request(
+                f"{auth_url}/auth",
+                data=json.dumps({"login": login, "password": password}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                token = data.get("access_token")
+                logger.info(f"Login {login}: {'OK' if token else 'No token'}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Login {login}: {e.code} {body}")
+            continue
+        except Exception as e:
+            logger.warning(f"Login {login} failed: {e}")
+            continue
 
-    logger.info(f"Total posts: {total_posts}, Unique: {unique_posts}, Authors with posts: {authors_with_posts}")
+        if not token:
+            continue
 
-    if total_posts == 100 and unique_posts == 100 and authors_with_posts == len(AUTHORS):
-        logger.info("All conditions met!")
-    else:
-        logger.error("Conditions not met!")
+        for i, content in enumerate(posts):
+            try:
+                req = urllib.request.Request(
+                    f"{post_url}/post",
+                    data=json.dumps({"content": content}).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {token}",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    post_id = result.get("post_id", "?")
+                    tags = result.get("tags", [])
+                    logger.info(f"Post {i+1}/{len(posts)} by {login}: id={post_id}, tags={tags}")
+                time.sleep(1)
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")
+                logger.warning(f"Post {i+1} by {login}: {e.code} {body}")
+            except Exception as e:
+                logger.warning(f"Post {i+1} by {login} failed: {e}")
 
-    logger.info("Simulation complete!")
-
+    logger.info("Database seeding complete!")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

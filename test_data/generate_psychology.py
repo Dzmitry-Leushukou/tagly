@@ -1,7 +1,14 @@
 import logging
 import random
 
+import urllib.request
+import json
+import os
+import time
 logger = logging.getLogger(__name__)
+
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8000")
+POST_SERVICE_URL = os.getenv("POST_SERVICE_URL", "http://localhost:8002")
 
 AUTHORS = [
     {'login': 'psych_expert_anna', 'password': 'PsychPass123!', 'description': 'Клинический психолог, 12 лет опыта в психотерапии'},
@@ -283,34 +290,85 @@ POSTS = {'psych_expert_anna': ['Тред на 10 секунд по теме «П
                                 'дальше, затем ручная проверка и честный фидбек. После этого контроль вернулся в руки; '
                                 'оставляю этот подход как рабочий стандарт.']}
 
+def seed_database():
+    """Register users via Auth Service and create posts via PostService."""
+    logger.info("Starting database seeding via services...")
 
-def create_user(login, password, description):
-    """Mock user creation for offline script."""
-    return random.randint(1000, 9999)
+    auth_url = os.getenv("AUTH_SERVICE_URL", AUTH_SERVICE_URL)
+    post_url = os.getenv("POST_SERVICE_URL", POST_SERVICE_URL)
 
-
-def create_post(user_id, content, tags):
-    """Mock post creation for offline script."""
-    return random.randint(10000, 99999)
-
-
-def main():
-    logger.info('Starting psychology posts generation...')
-    user_ids = {}
+    # Step 1: Register all authors via Auth Service
     for author in AUTHORS:
-        user_ids[author['login']] = create_user(author['login'], author['password'], author['description'])
+        try:
+            req = urllib.request.Request(
+                f"{auth_url}/register",
+                data=json.dumps({"login": author["login"], "password": author["password"]}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                logger.info(f"Register {author['login']}: {result}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Register {author['login']}: {e.code} {body}")
+        except Exception as e:
+            logger.warning(f"Register {author['login']} failed: {e}")
 
-    total_posts = 0
-    for author_login, posts in POSTS.items():
-        total_posts += len(posts)
-        for content in posts:
-            create_post(user_ids[author_login], content, ['psychology'])
+    # Step 2: Login each author and create posts via PostService
+    for author in AUTHORS:
+        login = author["login"]
+        password = author["password"]
+        posts = POSTS.get(login, [])
 
-    print(f'Successfully created {total_posts} psychology posts from {len(POSTS)} authors')
-    for author_login in sorted(POSTS.keys()):
-        print(f'- {author_login}: {len(POSTS[author_login])} posts')
+        token = None
+        try:
+            req = urllib.request.Request(
+                f"{auth_url}/auth",
+                data=json.dumps({"login": login, "password": password}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                token = data.get("access_token")
+                logger.info(f"Login {login}: {'OK' if token else 'No token'}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Login {login}: {e.code} {body}")
+            continue
+        except Exception as e:
+            logger.warning(f"Login {login} failed: {e}")
+            continue
 
+        if not token:
+            continue
 
-if __name__ == '__main__':
+        for i, content in enumerate(posts):
+            try:
+                req = urllib.request.Request(
+                    f"{post_url}/post",
+                    data=json.dumps({"content": content}).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {token}",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    post_id = result.get("post_id", "?")
+                    tags = result.get("tags", [])
+                    logger.info(f"Post {i+1}/{len(posts)} by {login}: id={post_id}, tags={tags}")
+                time.sleep(1)
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")
+                logger.warning(f"Post {i+1} by {login}: {e.code} {body}")
+            except Exception as e:
+                logger.warning(f"Post {i+1} by {login} failed: {e}")
+
+    logger.info("Database seeding complete!")
+
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    main()
+    seed_database()

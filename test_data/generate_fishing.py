@@ -269,7 +269,6 @@ POSTS = {'spin_fisher': ['По теме «Рыбалка» маленький ш
                     'сценарию: поставил таймер и держал фокус на одном пункте. После этого качество выросло уже на '
                     'первой итерации, и стало понятно, что держит систему в тонусе.']}
 
-
 def seed_database():
     """Register users via Auth Service and create posts via PostService."""
     logger.info("Starting database seeding via services...")
@@ -301,32 +300,30 @@ def seed_database():
         password = author["password"]
         posts = POSTS.get(login, [])
 
+        token = None
         try:
             req = urllib.request.Request(
-                f"{auth_url}/login",
+                f"{auth_url}/auth",
                 data=json.dumps({"login": login, "password": password}).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                token = result.get("token")
-                logger.info(f"Login {login}: token={'yes' if token else 'no'}")
+                data = json.loads(resp.read().decode("utf-8"))
+                token = data.get("access_token")
+                logger.info(f"Login {login}: {'OK' if token else 'No token'}")
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
             logger.warning(f"Login {login}: {e.code} {body}")
-            token = None
+            continue
         except Exception as e:
             logger.warning(f"Login {login} failed: {e}")
-            token = None
+            continue
 
         if not token:
             continue
 
-        posts_to_create = posts.copy()
-        random.shuffle(posts_to_create)
-
-        for i, content in enumerate(posts_to_create):
+        for i, content in enumerate(posts):
             try:
                 req = urllib.request.Request(
                     f"{post_url}/post",
@@ -341,8 +338,7 @@ def seed_database():
                     result = json.loads(resp.read().decode("utf-8"))
                     post_id = result.get("post_id", "?")
                     tags = result.get("tags", [])
-                    logger.info(f"Post {i+1}/{len(posts_to_create)} by {login}: id={post_id}, tags={tags}")
-                # Rate limit pause between posts
+                    logger.info(f"Post {i+1}/{len(posts)} by {login}: id={post_id}, tags={tags}")
                 time.sleep(1)
             except urllib.error.HTTPError as e:
                 body = e.read().decode("utf-8", errors="replace")
@@ -352,8 +348,6 @@ def seed_database():
 
     logger.info("Database seeding complete!")
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     seed_database()
-

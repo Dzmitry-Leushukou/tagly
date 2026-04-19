@@ -273,7 +273,6 @@ POSTS = {'rock_historian': ['Одна мысль по теме «Рок»: сц�
                       'оставил только рабочее ядро и проверка по фактам. И только после этого следующий шаг оказался '
                       'проще, чем казалось. Простой ход, который возвращает контроль.']}
 
-
 def seed_database():
     """Register users via Auth Service and create posts via PostService."""
     logger.info("Starting database seeding via services...")
@@ -305,11 +304,6 @@ def seed_database():
         password = author["password"]
         posts = POSTS.get(login, [])
 
-        # Randomize post order to avoid predictable pattern
-        posts_to_create = posts.copy()
-        random.shuffle(posts_to_create)
-
-        # Get access token
         token = None
         try:
             req = urllib.request.Request(
@@ -322,6 +316,10 @@ def seed_database():
                 data = json.loads(resp.read().decode("utf-8"))
                 token = data.get("access_token")
                 logger.info(f"Login {login}: {'OK' if token else 'No token'}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Login {login}: {e.code} {body}")
+            continue
         except Exception as e:
             logger.warning(f"Login {login} failed: {e}")
             continue
@@ -329,8 +327,7 @@ def seed_database():
         if not token:
             continue
 
-        # Create posts
-        for i, content in enumerate(posts_to_create):
+        for i, content in enumerate(posts):
             try:
                 req = urllib.request.Request(
                     f"{post_url}/post",
@@ -345,8 +342,7 @@ def seed_database():
                     result = json.loads(resp.read().decode("utf-8"))
                     post_id = result.get("post_id", "?")
                     tags = result.get("tags", [])
-                    logger.info(f"Post {i+1}/{len(posts_to_create)} by {login}: id={post_id}, tags={tags}")
-                # Rate limit — pause between posts
+                    logger.info(f"Post {i+1}/{len(posts)} by {login}: id={post_id}, tags={tags}")
                 time.sleep(1)
             except urllib.error.HTTPError as e:
                 body = e.read().decode("utf-8", errors="replace")
@@ -355,7 +351,6 @@ def seed_database():
                 logger.warning(f"Post {i+1} by {login} failed: {e}")
 
     logger.info("Database seeding complete!")
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

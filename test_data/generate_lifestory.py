@@ -286,88 +286,85 @@ POSTS = {'traveler_john': ['Вечерний вывод по теме «Жизн
                        'финальную проверку, попросил коллегу глянуть свежим взглядом. Через час напряжение в '
                        'обсуждении резко упало; простое решение, а сработало мощно.']}
 
-
 def seed_database():
+    """Register users via Auth Service and create posts via PostService."""
+    logger.info("Starting database seeding via services...")
+
+    auth_url = os.getenv("AUTH_SERVICE_URL", AUTH_SERVICE_URL)
+    post_url = os.getenv("POST_SERVICE_URL", POST_SERVICE_URL)
+
+    # Step 1: Register all authors via Auth Service
     for author in AUTHORS:
-        login = author["login"]
-        password = author["password"]
-        description = author["description"]
-
-        data = json.dumps({
-            "login": login,
-            "password": password,
-            "description": description
-        }).encode("utf-8")
-
-        req = urllib.request.Request(
-            f"{AUTH_SERVICE_URL}/register",
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-
         try:
+            req = urllib.request.Request(
+                f"{auth_url}/register",
+                data=json.dumps({"login": author["login"], "password": author["password"]}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
-                logger.info(f"Registered: {login} -> {result}")
+                logger.info(f"Register {author['login']}: {result}")
         except urllib.error.HTTPError as e:
-            if e.code == 409:
-                logger.info(f"Already exists: {login}")
-            else:
-                logger.error(f"Error registering {login}: {e.code} {e.read().decode()}")
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Register {author['login']}: {e.code} {body}")
         except Exception as e:
-            logger.error(f"Error registering {login}: {e}")
+            logger.warning(f"Register {author['login']} failed: {e}")
 
+    # Step 2: Login each author and create posts via PostService
     for author in AUTHORS:
         login = author["login"]
         password = author["password"]
+        posts = POSTS.get(login, [])
 
-        auth_data = json.dumps({"login": login, "password": password}).encode("utf-8")
-        auth_req = urllib.request.Request(
-            f"{AUTH_SERVICE_URL}/auth",
-            data=auth_data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-
+        token = None
         try:
-            with urllib.request.urlopen(auth_req, timeout=10) as resp:
-                auth_result = json.loads(resp.read().decode("utf-8"))
-                token = auth_result.get("token") or auth_result.get("access_token")
-                if not token:
-                    logger.error(f"No token for {login}: {auth_result}")
-                    continue
-                logger.info(f"Logged in: {login}")
+            req = urllib.request.Request(
+                f"{auth_url}/auth",
+                data=json.dumps({"login": login, "password": password}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                token = data.get("access_token")
+                logger.info(f"Login {login}: {'OK' if token else 'No token'}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            logger.warning(f"Login {login}: {e.code} {body}")
+            continue
         except Exception as e:
-            logger.error(f"Error logging in {login}: {e}")
+            logger.warning(f"Login {login} failed: {e}")
             continue
 
-        posts = POSTS.get(login, [])
-        for i, post_content in enumerate(posts):
-            post_data = json.dumps({"content": post_content}).encode("utf-8")
-            post_req = urllib.request.Request(
-                f"{POST_SERVICE_URL}/post",
-                data=post_data,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}"
-                },
-                method="POST"
-            )
+        if not token:
+            continue
 
+        for i, content in enumerate(posts):
             try:
-                with urllib.request.urlopen(post_req, timeout=10) as resp:
+                req = urllib.request.Request(
+                    f"{post_url}/post",
+                    data=json.dumps({"content": content}).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {token}",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
-                    logger.info(f"Post {i+1}/{len(posts)} created for {login}: {result.get('id', 'ok')}")
+                    post_id = result.get("post_id", "?")
+                    tags = result.get("tags", [])
+                    logger.info(f"Post {i+1}/{len(posts)} by {login}: id={post_id}, tags={tags}")
+                time.sleep(1)
+            except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")
+                logger.warning(f"Post {i+1} by {login}: {e.code} {body}")
             except Exception as e:
-                logger.error(f"Error creating post {i+1} for {login}: {e}")
+                logger.warning(f"Post {i+1} by {login} failed: {e}")
 
-            time.sleep(1)
-
+    logger.info("Database seeding complete!")
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO)
     seed_database()
