@@ -73,8 +73,12 @@ def service_is_reachable(url: str, timeout_seconds: float = 1.5) -> bool:
 
 
 def stream_generator_output(script_path: Path, stats: RunStats) -> tuple[int, int]:
-    cmd = [sys.executable, "-u", str(script_path)]
+    # Force UTF-8 in child generators so Cyrillic logs are decoded correctly.
+    cmd = [sys.executable, "-X", "utf8", "-u", str(script_path)]
     script_processed_posts = 0
+    child_env = os.environ.copy()
+    child_env["PYTHONUTF8"] = "1"
+    child_env["PYTHONIOENCODING"] = "utf-8"
 
     try:
         process = subprocess.Popen(
@@ -85,7 +89,7 @@ def stream_generator_output(script_path: Path, stats: RunStats) -> tuple[int, in
             encoding="utf-8",
             errors="replace",
             cwd=str(script_path.parent.parent),
-            env=os.environ.copy(),
+            env=child_env,
         )
     except OSError as exc:
         logging.error("Cannot start %s: %s", script_path.name, exc)
