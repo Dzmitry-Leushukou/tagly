@@ -81,6 +81,21 @@ class PostgreService:
             self.pool.closeall()
             logger.info("PostgreSQL connection pool closed")
 
+    @staticmethod
+    def _normalize_tags(raw_tags) -> list:
+        if not raw_tags:
+            return []
+        if isinstance(raw_tags, list):
+            return [dict(tag) if isinstance(tag, dict) else tag for tag in raw_tags]
+        if isinstance(raw_tags, str):
+            try:
+                parsed = json.loads(raw_tags)
+                if isinstance(parsed, list):
+                    return [dict(tag) if isinstance(tag, dict) else tag for tag in parsed]
+            except json.JSONDecodeError:
+                return []
+        return []
+
 
     def get_user(self,login):
         result = None
@@ -132,6 +147,20 @@ class PostgreService:
             logger.info("Table 'posts' created or already exists")
         except Exception as e:
             logger.error(f"Error creating table 'posts': {e}")
+            raise
+
+        try:
+            self.execute_query("""
+                CREATE INDEX IF NOT EXISTS idx_posts_created_at_desc
+                ON posts (created_at DESC)
+            """, commit=True)
+            self.execute_query("""
+                CREATE INDEX IF NOT EXISTS idx_posts_author_created_at_desc
+                ON posts (author_id, created_at DESC)
+            """, commit=True)
+            logger.info("Indexes for posts ordering created or already exist")
+        except Exception as e:
+            logger.error(f"Error creating posts indexes: {e}")
             raise
 
         try:
@@ -261,23 +290,29 @@ class PostgreService:
     def get_all_posts_with_tags(self) -> list:
         try:
             posts = self.execute_query("""
-                SELECT p.id, p.content, p.created_at, p.author_id, u.login as author_login
+                SELECT
+                    p.id,
+                    p.content,
+                    p.created_at,
+                    p.author_id,
+                    u.login as author_login,
+                    COALESCE(
+                        json_agg(json_build_object('id', t.id, 'name', t.name))
+                        FILTER (WHERE t.id IS NOT NULL),
+                        '[]'::json
+                    ) as tags
                 FROM posts p
                 JOIN users u ON p.author_id = u.id
+                LEFT JOIN post_tags pt ON pt.post_id = p.id
+                LEFT JOIN tags t ON t.id = pt.tag_id
+                GROUP BY p.id, p.content, p.created_at, p.author_id, u.login
                 ORDER BY p.created_at DESC
             """, fetch_all=True)
             
             result = []
             for post in posts:
-                tags = self.execute_query("""
-                    SELECT t.id, t.name
-                    FROM tags t
-                    JOIN post_tags pt ON t.id = pt.tag_id
-                    WHERE pt.post_id = %s
-                """, (post["id"],), fetch_all=True)
-                
                 post_dict = dict(post)
-                post_dict["tags"] = [dict(tag) for tag in tags] if tags else []
+                post_dict["tags"] = self._normalize_tags(post_dict.get("tags"))
                 result.append(post_dict)
             
             logger.info(f"Retrieved {len(result)} posts with tags")
@@ -411,25 +446,36 @@ class PostgreService:
 
             # Get posts with pagination
             posts = self.execute_query("""
-                SELECT p.id, p.content, p.created_at, p.author_id, u.login as author_login
-                FROM posts p
-                JOIN users u ON p.author_id = u.id
-                WHERE p.author_id = %s
-                ORDER BY p.created_at DESC
-                LIMIT %s OFFSET %s
+                WITH paged_posts AS (
+                    SELECT p.id, p.content, p.created_at, p.author_id
+                    FROM posts p
+                    WHERE p.author_id = %s
+                    ORDER BY p.created_at DESC
+                    LIMIT %s OFFSET %s
+                )
+                SELECT
+                    pp.id,
+                    pp.content,
+                    pp.created_at,
+                    pp.author_id,
+                    u.login as author_login,
+                    COALESCE(
+                        json_agg(json_build_object('id', t.id, 'name', t.name))
+                        FILTER (WHERE t.id IS NOT NULL),
+                        '[]'::json
+                    ) as tags
+                FROM paged_posts pp
+                JOIN users u ON pp.author_id = u.id
+                LEFT JOIN post_tags pt ON pt.post_id = pp.id
+                LEFT JOIN tags t ON t.id = pt.tag_id
+                GROUP BY pp.id, pp.content, pp.created_at, pp.author_id, u.login
+                ORDER BY pp.created_at DESC
             """, (author_id, limit, offset), fetch_all=True)
 
             result = []
             for post in posts:
-                tags = self.execute_query("""
-                    SELECT t.id, t.name
-                    FROM tags t
-                    JOIN post_tags pt ON t.id = pt.tag_id
-                    WHERE pt.post_id = %s
-                """, (post["id"],), fetch_all=True)
-
                 post_dict = dict(post)
-                post_dict["tags"] = [dict(tag) for tag in tags] if tags else []
+                post_dict["tags"] = self._normalize_tags(post_dict.get("tags"))
                 result.append(post_dict)
 
             logger.info(f"Retrieved {len(result)} posts for author_id={author_id} (total={total_count})")

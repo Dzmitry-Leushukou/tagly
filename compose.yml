@@ -57,7 +57,7 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - ./PostService:/PostService
+      - ./PostService:/app
     depends_on:
       auth:
         condition: service_healthy

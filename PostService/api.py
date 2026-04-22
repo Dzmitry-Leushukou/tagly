@@ -1,10 +1,12 @@
+import asyncio
 import json
 import logging
 import os
 import random
 import aiohttp
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from DeepseekService import send_completion_request
 
@@ -29,8 +31,8 @@ TAG_SYSTEM_PROMPT = """Ты — классификатор текстов. Тв�
 Отвечай ТОЛЬКО в формате JSON-массива строк. Никаких пояснений, лишних слов, запятых в конце или Markdown.
 Пример правильного ответа: ["спорт", "футбол", "чемпионат"]"""
 
-AUTH_SERVICE_URL = "http://auth:8000"
-DB_SERVICE_URL = "http://db-service:8001"
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth:8000")
+DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://db-service:8001")
 
 FEEDBACK_STEP = 0.1
 PREFERENCE_MIN = -1.0
@@ -39,6 +41,51 @@ PREFERENCE_MAX = 1.0
 EXPLOITATION_COUNT = int(os.getenv("EXPLOITATION_COUNT", "4"))
 EXPLORATION_COUNT = int(os.getenv("EXPLORATION_COUNT", "1"))
 SHUFFLE_RESULTS = os.getenv("SHUFFLE_RESULTS", "False").lower() in ("true", "1", "yes")
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def _verify_token_and_get_login(token: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{AUTH_SERVICE_URL}/verify",
+            headers={"Authorization": f"Bearer {token}"}
+        ) as verify_resp:
+            if verify_resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
+            verify_data = await verify_resp.json()
+
+    user_login = verify_data.get("login")
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Login not found in token")
+
+    return user_login
+
+
+async def get_current_user_login(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)
+) -> str:
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    if credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    return await _verify_token_and_get_login(credentials.credentials)
+
+
+async def get_optional_user_login(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)
+) -> str | None:
+    if not credentials or not credentials.credentials:
+        return None
+
+    if credentials.scheme.lower() != "bearer":
+        return None
+
+    try:
+        return await _verify_token_and_get_login(credentials.credentials)
+    except HTTPException:
+        return None
 
 
 class PostCreateRequest(BaseModel):
@@ -80,29 +127,9 @@ async def read_root():
 @app.post("/post", response_model=PostCreateResponse)
 async def create_post(
     request: PostCreateRequest,
-    authorization: str = Header(None)
+    author_login: str = Depends(get_current_user_login)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-
-    token = authorization.split(" ", 1)[1]
-
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/verify",
-            headers={"Authorization": f"Bearer {token}"}
-        ) as verify_resp:
-            if verify_resp.status != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            verify_data = await verify_resp.json()
-            author_login = verify_data.get("login")
-
-        if not author_login:
-            raise HTTPException(status_code=401, detail="Login not found in token")
-
         async with session.get(f"{DB_SERVICE_URL}/user/{author_login}") as user_resp:
             if user_resp.status != 200:
                 raise HTTPException(status_code=404, detail="Author not found")
@@ -167,31 +194,17 @@ async def create_post(
 
 
 @app.get("/recommendations")
-async def get_recommendations(authorization: str = Header(None)):
-    user_login = None
+async def get_recommendations(user_login: str | None = Depends(get_optional_user_login)):
     user_id = None
     preference_vector = {}
 
     async with aiohttp.ClientSession() as session:
-        if authorization and authorization.startswith("Bearer "):
-            token = authorization.split(" ", 1)[1]
-            try:
-                async with session.get(
-                    f"{AUTH_SERVICE_URL}/verify",
-                    headers={"Authorization": f"Bearer {token}"}
-                ) as verify_resp:
-                    if verify_resp.status == 200:
-                        verify_data = await verify_resp.json()
-                        user_login = verify_data.get("login")
-
-                if user_login:
-                    async with session.get(f"{DB_SERVICE_URL}/user/{user_login}") as user_resp:
-                        if user_resp.status == 200:
-                            user_data = await user_resp.json()
-                            user_id = user_data["id"]
-                            preference_vector = user_data.get("preference_vector", {}) or {}
-            except Exception as e:
-                logger.warning(f"Token verification failed: {e}")
+        if user_login:
+            async with session.get(f"{DB_SERVICE_URL}/user/{user_login}") as user_resp:
+                if user_resp.status == 200:
+                    user_data = await user_resp.json()
+                    user_id = user_data["id"]
+                    preference_vector = user_data.get("preference_vector", {}) or {}
 
         async with session.get(f"{DB_SERVICE_URL}/posts") as posts_resp:
             if posts_resp.status != 200:
@@ -201,7 +214,12 @@ async def get_recommendations(authorization: str = Header(None)):
         shown_post_ids = set()
         if user_id:
             shown = await _get_shown_posts(session, user_id)
-            shown_post_ids = set(shown.keys())
+            shown_post_ids = set()
+            for post_id in shown.keys():
+                try:
+                    shown_post_ids.add(int(post_id))
+                except (TypeError, ValueError):
+                    continue
 
         if not user_id or not preference_vector or not any(v != 0 for v in preference_vector.values()):
             available_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
@@ -258,33 +276,33 @@ async def get_recommendations(authorization: str = Header(None)):
             for post in recommended:
                 await _record_shown_post(session, user_id, post["id"], batch_number)
 
-    # Добавляем author_login и информацию о лайке в каждый пост
+    # Add author_login and like/dislike flags to each recommended post
+    feedback_by_post_id = {}
+    if user_id and recommended:
+        async with aiohttp.ClientSession() as feedback_session:
+            tasks = [
+                _fetch_feedback_type(feedback_session, user_id, post["id"])
+                for post in recommended
+            ]
+            feedback_types = await asyncio.gather(*tasks)
+
+        for post, feedback_type in zip(recommended, feedback_types):
+            if feedback_type:
+                feedback_by_post_id[post["id"]] = feedback_type
+
     result_posts = []
     for post in recommended:
-        post_result = {
+        feedback_type = feedback_by_post_id.get(post["id"])
+        result_posts.append({
             "id": post["id"],
             "content": post["content"],
             "created_at": post["created_at"],
             "author_id": post["author_id"],
             "author_login": post.get("author_login"),
             "tags": post.get("tags", []),
-            "user_liked": False,
-            "user_disliked": False
-        }
-        
-        # Если пользователь авторизован, получаем информацию о фидбеке
-        if user_id:
-            try:
-                async with session.get(f"{DB_SERVICE_URL}/user_feedback/{user_id}/{post['id']}") as feedback_resp:
-                    if feedback_resp.status == 200:
-                        feedback_data = await feedback_resp.json()
-                        feedback_type = feedback_data.get("feedback_type")
-                        post_result["user_liked"] = feedback_type == "like"
-                        post_result["user_disliked"] = feedback_type == "dislike"
-            except Exception as e:
-                logger.warning(f"Failed to get feedback for post {post['id']}: {e}")
-        
-        result_posts.append(post_result)
+            "user_liked": feedback_type == "like",
+            "user_disliked": feedback_type == "dislike"
+        })
 
     return {"recommendations": result_posts}
 
@@ -322,35 +340,26 @@ async def _record_shown_post(session: aiohttp.ClientSession, user_id: int, post_
         logger.error(f"Error recording shown post: {e}")
 
 
+async def _fetch_feedback_type(session: aiohttp.ClientSession, user_id: int, post_id: int) -> str | None:
+    try:
+        async with session.get(f"{DB_SERVICE_URL}/user_feedback/{user_id}/{post_id}") as feedback_resp:
+            if feedback_resp.status == 200:
+                feedback_data = await feedback_resp.json()
+                return feedback_data.get("feedback_type")
+    except Exception as e:
+        logger.warning(f"Failed to get feedback for post {post_id}: {e}")
+    return None
+
+
 @app.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     request: FeedbackRequest,
-    authorization: str = Header(None)
+    user_login: str = Depends(get_current_user_login)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-
-    token = authorization.split(" ", 1)[1]
-
     if request.feedback_type not in ("like", "dislike"):
         raise HTTPException(status_code=400, detail="feedback_type must be 'like' or 'dislike'")
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/verify",
-            headers={"Authorization": f"Bearer {token}"}
-        ) as verify_resp:
-            if verify_resp.status != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            verify_data = await verify_resp.json()
-            user_login = verify_data.get("login")
-
-        if not user_login:
-            raise HTTPException(status_code=401, detail="Login not found in token")
-
         async with session.get(f"{DB_SERVICE_URL}/user/{user_login}") as user_resp:
             if user_resp.status != 200:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -398,32 +407,12 @@ async def submit_feedback(
 @app.post("/tags/favorite", response_model=FavoriteTagsResponse)
 async def set_favorite_tags(
     request: FavoriteTagsRequest,
-    authorization: str = Header(None)
+    user_login: str = Depends(get_current_user_login)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-
-    token = authorization.split(" ", 1)[1]
-
     if not request.tag_ids:
         raise HTTPException(status_code=400, detail="tag_ids cannot be empty")
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/verify",
-            headers={"Authorization": f"Bearer {token}"}
-        ) as verify_resp:
-            if verify_resp.status != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            verify_data = await verify_resp.json()
-            user_login = verify_data.get("login")
-
-        if not user_login:
-            raise HTTPException(status_code=401, detail="Login not found in token")
-
         async with session.get(f"{DB_SERVICE_URL}/user/{user_login}") as user_resp:
             if user_resp.status != 200:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -486,28 +475,8 @@ async def get_all_tags(limit: int = 50, offset: int = 0):
 
 
 @app.get("/tags/my")
-async def get_my_favorite_tags(authorization: str = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-
-    token = authorization.split(" ", 1)[1]
-
+async def get_my_favorite_tags(user_login: str = Depends(get_current_user_login)):
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/verify",
-            headers={"Authorization": f"Bearer {token}"}
-        ) as verify_resp:
-            if verify_resp.status != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            verify_data = await verify_resp.json()
-            user_login = verify_data.get("login")
-
-        if not user_login:
-            raise HTTPException(status_code=401, detail="Login not found in token")
-
         async with session.get(f"{DB_SERVICE_URL}/user/{user_login}/favorite_tags") as tags_resp:
             if tags_resp.status == 404:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -520,31 +489,11 @@ async def get_my_favorite_tags(authorization: str = Header(None)):
 
 @app.get("/my-posts")
 async def get_my_posts(
-    authorization: str = Header(None),
     limit: int = 20,
-    offset: int = 0
+    offset: int = 0,
+    author_login: str = Depends(get_current_user_login)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-
-    token = authorization.split(" ", 1)[1]
-
     async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{AUTH_SERVICE_URL}/verify",
-            headers={"Authorization": f"Bearer {token}"}
-        ) as verify_resp:
-            if verify_resp.status != 200:
-                raise HTTPException(status_code=401, detail="Invalid or expired token")
-            verify_data = await verify_resp.json()
-            author_login = verify_data.get("login")
-
-        if not author_login:
-            raise HTTPException(status_code=401, detail="Login not found in token")
-
         async with session.get(
             f"{DB_SERVICE_URL}/user/{author_login}/posts?limit={limit}&offset={offset}"
         ) as posts_resp:
