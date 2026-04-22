@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { postsAPI } from '../services/api';
 
@@ -9,73 +9,97 @@ function Home() {
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [expandedPosts, setExpandedPosts] = useState({});
+  const loadingRef = useRef(false);
   const navigate = useNavigate();
 
   const getAvatarUrl = (login) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(login || 'user')}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
   };
 
+  const getUserId = async () => {
+    const login = localStorage.getItem('login');
+    if (!login) return null;
+    try {
+      const userRes = await fetch(`http://localhost:8001/user/${login}`);
+      const user = await userRes.json();
+      return user.id;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const loadFeedbackForPosts = async (postsList, userId) => {
+    if (!userId) return postsList.map(p => ({ ...p, user_liked: false, user_disliked: false }));
+    
+    const postsWithFeedback = await Promise.all(postsList.map(async (post) => {
+      try {
+        const res = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
+        if (res.ok) {
+          const feedback = await res.json();
+          return {
+            ...post,
+            user_liked: feedback.feedback_type === 'like',
+            user_disliked: feedback.feedback_type === 'dislike'
+          };
+        }
+      } catch (e) {}
+      return { ...post, user_liked: false, user_disliked: false };
+    }));
+    return postsWithFeedback;
+  };
+
   const loadPosts = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loadingRef.current || !hasMore) return;
+    loadingRef.current = true;
     setLoading(true);
+    
     try {
       const response = await postsAPI.getRecommendations();
       let newPosts = response.data?.recommendations || [];
       
-      const login = localStorage.getItem('login');
-      let userId = null;
-      
-      if (login) {
-        try {
-          const userRes = await fetch(`http://localhost:8001/user/${login}`);
-          const user = await userRes.json();
-          userId = user.id;
-        } catch (e) {
-          console.error('Error getting user ID:', e);
-        }
+      if (newPosts.length === 0) {
+        setHasMore(false);
+        loadingRef.current = false;
+        setLoading(false);
+        return;
       }
       
-      const postsWithLikes = await Promise.all(newPosts.map(async (post) => {
-        if (userId) {
-          try {
-            const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
-            if (feedbackRes.ok) {
-              const feedback = await feedbackRes.json();
-              return {
-                ...post,
-                user_liked: feedback.feedback_type === 'like',
-                likes: post.likes || 0
-              };
-            }
-          } catch (e) {
-            console.error('Error loading feedback for post', post.id, e);
-          }
-        }
-        return { ...post, user_liked: false, likes: post.likes || 0 };
-      }));
+      const userId = await getUserId();
+      const postsWithFeedback = await loadFeedbackForPosts(newPosts, userId);
       
-      if (postsWithLikes.length < 5) setHasMore(false);
-      setPosts(prev => [...prev, ...postsWithLikes]);
+      setPosts(prev => [...prev, ...postsWithFeedback]);
+      
+      if (newPosts.length < 5) {
+        setHasMore(false);
+      }
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [loading, hasMore]);
+  }, [hasMore]);
+
+  useEffect(() => {
+    let timeoutId;
+    const handleScroll = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+          loadPosts();
+        }
+      }, 200);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [loadPosts]);
 
   useEffect(() => {
     loadPosts();
-  }, [loadPosts]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-        loadPosts();
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [loadPosts]);
+  }, []);
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
@@ -92,23 +116,41 @@ function Home() {
   };
 
   const handleLike = async (postId) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
+    const currentPost = posts.find(p => p.id === postId);
+    if (!currentPost) return;
     
-    const newLiked = !post.user_liked;
-    const newLikes = newLiked ? (post.likes || 0) + 1 : (post.likes || 0) - 1;
+    const newLiked = !currentPost.user_liked;
+    
     setPosts(posts.map(p => 
-      p.id === postId ? { ...p, user_liked: newLiked, likes: newLikes } : p
+      p.id === postId ? { ...p, user_liked: newLiked, user_disliked: false } : p
     ));
     
     try {
-      await postsAPI.sendFeedback(postId, newLiked ? 'like' : 'dislike');
-      console.log(`Post ${postId} ${newLiked ? 'liked' : 'disliked'} successfully`);
+      await postsAPI.sendFeedback(postId, 'like');
     } catch (error) {
-      console.error('Error sending feedback:', error);
-      
+      console.error('Like error:', error);
       setPosts(posts.map(p => 
-        p.id === postId ? { ...p, user_liked: post.user_liked, likes: post.likes } : p
+        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+      ));
+    }
+  };
+
+  const handleDislike = async (postId) => {
+    const currentPost = posts.find(p => p.id === postId);
+    if (!currentPost) return;
+    
+    const newDisliked = !currentPost.user_disliked;
+    
+    setPosts(posts.map(p => 
+      p.id === postId ? { ...p, user_liked: false, user_disliked: newDisliked } : p
+    ));
+    
+    try {
+      await postsAPI.sendFeedback(postId, 'dislike');
+    } catch (error) {
+      console.error('Dislike error:', error);
+      setPosts(posts.map(p => 
+        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
       ));
     }
   };
@@ -177,10 +219,19 @@ function Home() {
                       onClick={() => handleLike(post.id)} 
                       style={{
                         ...styles.actionButton,
-                        color: post.user_liked ? '#ff4444' : '#9F9EC3'
+                        opacity: post.user_liked ? 1 : 0.2
                       }}
                     >
-                      ❤️ {post.likes || 0}
+                      ❤️
+                    </button>
+                    <button 
+                      onClick={() => handleDislike(post.id)} 
+                      style={{
+                        ...styles.actionButton,
+                        opacity: post.user_disliked ? 1 : 0.2
+                      }}
+                    >
+                      💔
                     </button>
                   </div>
                 </div>
@@ -210,12 +261,22 @@ function Home() {
   );
 }
 
-
-
 const styles = {
   container: {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #FFE6FB 30%, #DDE9FF 100%)',
+  },
+  actionButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '29px',
+    fontFamily: "'IM Fell French Canon', serif",
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: 'all 0.2s ease',
+    color: '#9F9EC3'
   },
   navbar: {
     position: 'fixed',
@@ -426,16 +487,6 @@ const styles = {
     gap: '39px',
     paddingTop: '16px',
     borderTop: '1px solid #9EABC3',
-  },
-  actionButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '29px',
-    fontFamily: "'IM Fell French Canon', serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
   },
   loading: {
     textAlign: 'center',
