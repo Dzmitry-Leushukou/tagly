@@ -94,5 +94,24 @@ services:
       redis:
         condition: service_healthy
 
+  frontend:
+    build: ./frontend
+    container_name: tagly-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - HOST=0.0.0.0
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      auth:
+        condition: service_healthy
+      db-service:
+        condition: service_healthy
+      post_service:
+        condition: service_started
+
 volumes:
   postgres_data:
