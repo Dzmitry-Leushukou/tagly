@@ -2,7 +2,6 @@ import axios from 'axios';
 
 const API_AUTH = 'http://localhost:8000';
 const API_POSTS = 'http://localhost:8002';
-const API_DB = 'http://localhost:8001';
 
 const api = axios.create();
 
@@ -37,7 +36,6 @@ api.interceptors.response.use(
   }
 );
 
-
 export const authAPI = {
   register: (login, password) => api.post(`${API_AUTH}/register`, { login, password }),
   login: (login, password) => api.post(`${API_AUTH}/auth`, { login, password }),
@@ -55,7 +53,6 @@ export const tagsAPI = {
   getAllTags: (limit = 50, offset = 0) => api.get(`${API_POSTS}/tags?limit=${limit}&offset=${offset}`),
   saveUserTags: (tagIds) => api.post(`${API_POSTS}/tags/favorite`, { tag_ids: tagIds }),
   getMyFavoriteTags: () => api.get(`${API_POSTS}/tags/my`),
-  getUserFavoriteTags: (login, minWeight = 0.0) => api.get(`${API_DB}/user/${login}/favorite_tags?min_weight=${minWeight}`),
 };
 
 export default api;

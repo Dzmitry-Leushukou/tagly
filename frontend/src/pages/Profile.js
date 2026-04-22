@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { postsAPI } from '../services/api';
 
@@ -11,21 +11,29 @@ function Profile() {
 
   const username = localStorage.getItem('login') || 'user';
 
-  const loadUserPosts = async () => {
-  try {
-    const response = await postsAPI.getMyPosts(50, 0);
-    setUserPosts(response.data.posts || []);
-  } catch (error) {
-    console.error('Error loading user posts:', error);
-    setUserPosts([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  const loadUserPosts = useCallback(async () => {
+    try {
+      const response = await postsAPI.getMyPosts(50, 0);
+      let posts = response.data.posts || [];
+      
+      const postsWithoutLikes = posts.map(post => ({
+        ...post,
+        user_liked: false,
+        user_disliked: false
+      }));
+      
+      setUserPosts(postsWithoutLikes);
+    } catch (error) {
+      console.error('Error loading user posts:', error);
+      setUserPosts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadUserPosts();
-  }, []);
+  }, [loadUserPosts]);
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
@@ -39,57 +47,9 @@ function Profile() {
     }
   };
 
-  const handleLike = async (postId) => {
-  const post = userPosts.find(p => p.id === postId);
-  if (!post) return;
-  
-  const newLiked = !post.user_liked;
-  const newLikes = newLiked ? (post.likes || 0) + 1 : (post.likes || 0) - 1;
-  
-  setUserPosts(userPosts.map(p => 
-    p.id === postId ? { ...p, user_liked: newLiked, likes: newLikes } : p
-  ));
- 
-  try {
-    await postsAPI.sendFeedback(postId, newLiked ? 'like' : 'dislike');
-  } catch (error) {
-    console.error('Error sending feedback:', error);
-    setUserPosts(userPosts.map(p => 
-      p.id === postId ? { ...p, user_liked: post.user_liked, likes: post.likes } : p
-    ));
-  }
-};
-
-  const handleDislike = async (postId) => {
-    const post = userPosts.find(p => p.id === postId);
-    if (post.user_disliked) {
-      setUserPosts(userPosts.map(p => 
-        p.id === postId ? {...p, user_disliked: false, dislikes: (p.dislikes || 0) - 1} : p
-      ));
-      return;
-    }
-    if (post.user_liked) {
-      setUserPosts(userPosts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: false, 
-          user_disliked: true, 
-          likes: (p.likes || 0) - 1, 
-          dislikes: (p.dislikes || 0) + 1
-        } : p
-      ));
-      return;
-    }
-    setUserPosts(userPosts.map(p => 
-      p.id === postId ? {...p, user_disliked: true, dislikes: (p.dislikes || 0) + 1} : p
-    ));
-  };
-
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
   };
-
-  const totalLikes = userPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
 
   return (
     <div style={styles.container}>
@@ -121,10 +81,7 @@ function Profile() {
                   <span style={styles.statNumber}>{userPosts.length}</span>
                   <span style={styles.statLabel}>posts</span>
                 </div>
-                <div style={styles.statItem}>
-                  <span style={styles.statNumber}>{totalLikes}</span>
-                  <span style={styles.statLabel}>likes</span>
-                </div>
+                
               </div>
             </div>
           </div>
@@ -154,12 +111,8 @@ function Profile() {
                 ))}
               </div>
               <div style={styles.postFooter}>
-                <button onClick={() => handleLike(post.id)} style={{ ...styles.likeButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
-                  ❤️ {post.likes || 0}
-                </button>
-                <button onClick={() => handleDislike(post.id)} style={{ ...styles.dislikeButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
-                  💔 {post.dislikes || 0}
-                </button>
+                <span style={{ ...styles.actionButton, opacity: 0.2 }}>❤️ </span>
+                <span style={{ ...styles.actionButton, opacity: 0.2 }}>💔 </span>
               </div>
             </div>
           ))}
@@ -472,26 +425,6 @@ const styles = {
     paddingTop: '19px',
     borderTop: '1px solid #9EABC3',
   },
-  likeButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '27px',
-    fontFamily: "'IM Fell French Canon', serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  dislikeButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '27px',
-    fontFamily: "'IM Fell French Canon', serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
   loading: {
     textAlign: 'center',
     padding: '59px',
@@ -585,6 +518,18 @@ const styles = {
     fontStyle: 'italic',
     color: 'white',
     cursor: 'pointer',
+  },
+  actionButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '29px',
+    fontFamily: "'IM Fell French Canon', serif",
+    cursor: 'default',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    color: '#9F9EC3',
+    transition: 'all 0.2s ease',
   },
 };
 

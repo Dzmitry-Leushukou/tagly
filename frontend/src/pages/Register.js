@@ -4,10 +4,7 @@ import { authAPI } from '../services/api';
 
 function Register() {
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: 'Male',
+   
     username: '',
     password: '',
     confirmPassword: '',
@@ -17,8 +14,7 @@ function Register() {
   const [usernameAvailable, setUsernameAvailable] = useState(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const navigate = useNavigate();
-  const [photo, setPhoto] = useState(null);
-
+  
   const hasMinLength = form.password.length >= 8;
   const hasNumber = /\d/.test(form.password);
   const hasCapital = /[A-Z]/.test(form.password);
@@ -71,8 +67,7 @@ function Register() {
       localStorage.setItem('access_token', response.data.access_token);
       localStorage.setItem('refresh_token', response.data.refresh_token);
       localStorage.setItem('login', form.username);
-      localStorage.setItem('firstName', form.firstName);
-      localStorage.setItem('lastName', form.lastName);
+      
       navigate('/tag-selection');
     } catch (error) {
       setError('Registration failed. User may already exist.');
@@ -85,74 +80,10 @@ function Register() {
         <div style={styles.blueShape}>
           <span style={styles.title}>Create your account</span>
         </div>
-        <div style={styles.photoSection}>
-        <div style={styles.photoLabel}>Upload a profile photo</div>
-        <div style={styles.photoUpload} onClick={() => document.getElementById('photoInput').click()}>
-          {photo ? (
-            <img src={URL.createObjectURL(photo)} alt="Profile" style={styles.photoPreview} />
-          ) : (
-            <div style={styles.photoPlaceholder}>📷</div>
-          )}
-          <input
-            type="file"
-            id="photoInput"
-            accept="image/*"
-            onChange={(e) => setPhoto(e.target.files[0])}
-            style={styles.hiddenInput}
-          />
-        </div>
-      </div>
+      
         <form onSubmit={handleSubmit}>
-          <div style={styles.nameContainer}>
-            <div style={styles.nameContainerLabel}>Enter your name</div>
-            <div style={styles.nameRow}>
-              <div style={styles.nameField}>
-                <input
-                  type="text"
-                  placeholder="First name"
-                  value={form.firstName}
-                  onChange={(e) => setForm({...form, firstName: e.target.value})}
-                  style={styles.nameInput}
-                />
-              </div>
-              <div style={styles.nameField}>
-                <input
-                  type="text"
-                  placeholder="Last name"
-                  value={form.lastName}
-                  onChange={(e) => setForm({...form, lastName: e.target.value})}
-                  style={styles.nameInput}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div style={styles.rowContainer}>
-            <div style={styles.halfField}>
-              <div style={styles.fieldLabel}>Date of birth</div>
-              <input
-                type="text"
-                placeholder="YYYY-MM-DD"
-                value={form.birthDate}
-                onChange={(e) => setForm({...form, birthDate: e.target.value})}
-                style={styles.input}
-              />
-            </div>
-            <div style={styles.halfField}>
-              <div style={styles.fieldLabel}>Gender</div>
-              <div style={styles.genderGroup}>
-                <label style={styles.genderLabel}>
-                  <input type="radio" name="gender" value="Male" checked={form.gender === 'Male'} onChange={(e) => setForm({...form, gender: e.target.value})} />
-                  Male
-                </label>
-                <label style={styles.genderLabel}>
-                  <input type="radio" name="gender" value="Female" checked={form.gender === 'Female'} onChange={(e) => setForm({...form, gender: e.target.value})} />
-                  Female
-                </label>
-              </div>
-            </div>
-          </div>
-
+           <div style={styles.fieldContainer}></div>
+         
           <div style={styles.fieldContainer}>
             <div style={styles.fieldLabel}>Username</div>
             <div style={styles.inputIconWrapper}>

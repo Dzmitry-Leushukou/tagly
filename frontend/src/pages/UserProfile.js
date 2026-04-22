@@ -6,15 +6,24 @@ function UserProfile() {
   const { login } = useParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedPosts, setExpandedPosts] = useState({});
   const navigate = useNavigate();
 
   const loadUserPosts = useCallback(async () => {
     try {
       const response = await postsAPI.getUserPostsByLogin(login, 50, 0);
-      setPosts(response.data.posts || []);
+      let postsData = response.data.posts || [];
+      
+      const savedReactions = JSON.parse(localStorage.getItem('user_reactions') || '{}');
+      const postsWithReactions = postsData.map(post => ({
+        ...post,
+        user_liked: savedReactions[post.id] === 'like',
+        user_disliked: savedReactions[post.id] === 'dislike'
+      }));
+      
+      setPosts(postsWithReactions);
     } catch (error) {
       console.error('Error loading user posts:', error);
-      setPosts([]);
     } finally {
       setLoading(false);
     }
@@ -24,61 +33,70 @@ function UserProfile() {
     loadUserPosts();
   }, [loadUserPosts]);
 
+  const updateReaction = (postId, reactionType) => {
+    const savedReactions = JSON.parse(localStorage.getItem('user_reactions') || '{}');
+    
+    if (reactionType === null) {
+      delete savedReactions[postId];
+    } else {
+      savedReactions[postId] = reactionType;
+    }
+    localStorage.setItem('user_reactions', JSON.stringify(savedReactions));
+    
+    setPosts(posts.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          user_liked: reactionType === 'like',
+          user_disliked: reactionType === 'dislike'
+        };
+      }
+      return post;
+    }));
+  };
+
   const handleLike = async (postId) => {
     const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    
     if (post.user_liked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {...p, user_liked: false, likes: (p.likes || 0) - 1} : p
-      ));
-      return;
+      updateReaction(postId, null);
+      await postsAPI.sendFeedback(postId, 'like').catch(e => console.error(e));
+    } else {
+      updateReaction(postId, 'like');
+      await postsAPI.sendFeedback(postId, 'like').catch(e => console.error(e));
     }
-    if (post.user_disliked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: true, 
-          user_disliked: false, 
-          likes: (p.likes || 0) + 1, 
-          dislikes: (p.dislikes || 0) - 1
-        } : p
-      ));
-      return;
-    }
-    setPosts(posts.map(p => 
-      p.id === postId ? {...p, user_liked: true, likes: (p.likes || 0) + 1} : p
-    ));
   };
 
   const handleDislike = async (postId) => {
     const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    
     if (post.user_disliked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {...p, user_disliked: false, dislikes: (p.dislikes || 0) - 1} : p
-      ));
-      return;
+      updateReaction(postId, null);
+      await postsAPI.sendFeedback(postId, 'dislike').catch(e => console.error(e));
+    } else {
+      updateReaction(postId, 'dislike');
+      await postsAPI.sendFeedback(postId, 'dislike').catch(e => console.error(e));
     }
-    if (post.user_liked) {
-      setPosts(posts.map(p => 
-        p.id === postId ? {
-          ...p, 
-          user_liked: false, 
-          user_disliked: true, 
-          likes: (p.likes || 0) - 1, 
-          dislikes: (p.dislikes || 0) + 1
-        } : p
-      ));
-      return;
+  };
+
+  const toggleReadMore = (postId) => {
+    setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
+  };
+
+  const getTruncatedContent = (content, postId) => {
+    if (expandedPosts[postId]) return content;
+    const maxLength = 225;
+    if (content.length > maxLength) {
+      return content.slice(0, maxLength) + '...';
     }
-    setPosts(posts.map(p => 
-      p.id === postId ? {...p, user_disliked: true, dislikes: (p.dislikes || 0) + 1} : p
-    ));
+    return content;
   };
 
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
   };
-
-  const totalLikes = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
 
   return (
     <div style={styles.container}>
@@ -110,10 +128,7 @@ function UserProfile() {
                   <span style={styles.statNumber}>{posts.length}</span>
                   <span style={styles.statLabel}>posts</span>
                 </div>
-                <div style={styles.statItem}>
-                  <span style={styles.statNumber}>{totalLikes}</span>
-                  <span style={styles.statLabel}>likes</span>
-                </div>
+                
               </div>
             </div>
           </div>
@@ -128,18 +143,35 @@ function UserProfile() {
                   <span style={styles.postAuthor}>@{post.author_login || login}</span>
                 </div>
               </div>
-              <p style={styles.postContent}>{post.content}</p>
+              <p style={styles.postContent}>{getTruncatedContent(post.content, post.id)}</p>
+              {post.content && post.content.length > 225 && (
+                <button onClick={() => toggleReadMore(post.id)} style={styles.readMore}>
+                  {expandedPosts[post.id] ? 'Show less' : 'Read more'}
+                </button>
+              )}
               <div style={styles.tags}>
                 {post.tags?.map((tag, tagIndex) => (
                   <span key={`${post.id}-tag-${tagIndex}`} style={styles.tag}>- {tag.name}</span>
                 ))}
               </div>
               <div style={styles.postFooter}>
-                <button onClick={() => handleLike(post.id)} style={{ ...styles.likeButton, color: post.user_liked ? '#ff4444' : '#9F9EC3' }}>
-                  ❤️ {post.likes || 0}
+                <button 
+                  onClick={() => handleLike(post.id)} 
+                  style={{
+                    ...styles.actionButton,
+                    opacity: post.user_liked ? 1 : 0.2
+                  }}
+                >
+                  ❤️
                 </button>
-                <button onClick={() => handleDislike(post.id)} style={{ ...styles.dislikeButton, color: post.user_disliked ? '#ff4444' : '#9F9EC3' }}>
-                  💔 {post.dislikes || 0}
+                <button 
+                  onClick={() => handleDislike(post.id)} 
+                  style={{
+                    ...styles.actionButton,
+                    opacity: post.user_disliked ? 1 : 0.2
+                  }}
+                >
+                  💔
                 </button>
               </div>
             </div>
@@ -157,6 +189,18 @@ const styles = {
   container: {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #FFE6FB 30%, #DDE9FF 100%)',
+  },
+  actionButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '29px',
+    fontFamily: "'IM Fell French Canon', serif",
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: 'all 0.2s ease',
+    color: '#9F9EC3'
   },
   navbar: {
     position: 'fixed',
@@ -351,6 +395,16 @@ const styles = {
     lineHeight: '1.5',
     marginBottom: '19px',
   },
+  readMore: {
+    background: 'none',
+    border: 'none',
+    fontSize: '25px',
+    fontFamily: "'IM Fell French Canon', serif",
+    color: '#92A9E0',
+    cursor: 'pointer',
+    marginBottom: '16px',
+    padding: 0,
+  },
   tags: {
     display: 'flex',
     gap: '19px',
@@ -367,26 +421,6 @@ const styles = {
     gap: '39px',
     paddingTop: '19px',
     borderTop: '1px solid #9EABC3',
-  },
-  likeButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '27px',
-    fontFamily: "'IM Fell French Canon', serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  dislikeButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '27px',
-    fontFamily: "'IM Fell French Canon', serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
   },
   loading: {
     textAlign: 'center',
