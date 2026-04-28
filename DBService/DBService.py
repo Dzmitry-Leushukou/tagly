@@ -207,7 +207,6 @@ def update_preference_vector(login: str, request: PreferenceVectorRequest):
             login=login,
             preference_vector=request.preference_vector
         )
-        # Invalidate cache
         redis_service.delete(login)
         logger.info(f"Invalidated cache for user {login}")
         return {"status": "ok", "preference_vector": request.preference_vector}

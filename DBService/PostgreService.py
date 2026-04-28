@@ -436,7 +436,6 @@ class PostgreService:
         """Get posts by author with tags, sorted by created_at DESC (newest first).
         Returns tuple of (posts_list, total_count)"""
         try:
-            # Get total count
             count_result = self.execute_query("""
                 SELECT COUNT(*) as total
                 FROM posts
@@ -444,7 +443,6 @@ class PostgreService:
             """, (author_id,), fetch_one=True)
             total_count = count_result["total"] if count_result else 0
 
-            # Get posts with pagination
             posts = self.execute_query("""
                 WITH paged_posts AS (
                     SELECT p.id, p.content, p.created_at, p.author_id
@@ -488,16 +486,10 @@ class PostgreService:
         """Get tags with positive weights from user's preference_vector.
         Returns list of {id, name, weight} for tags with weight > min_weight."""
         try:
-            # Get user's preference vector
-            user = self.get_user(login)
-            if not user:
-                return []
-
             pref_vector = user.get("preference_vector", {})
             if not pref_vector:
                 return []
 
-            # Filter tags by minimum weight
             favorite_tag_names = [
                 tag_name for tag_name, weight in pref_vector.items()
                 if weight > min_weight
@@ -506,7 +498,6 @@ class PostgreService:
             if not favorite_tag_names:
                 return []
 
-            # Get tag IDs for the favorite tag names
             placeholders = ','.join(['%s'] * len(favorite_tag_names))
             tags = self.execute_query(
                 f"""

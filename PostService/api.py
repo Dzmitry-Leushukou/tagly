@@ -37,6 +37,7 @@ DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://db-service:8001")
 FEEDBACK_STEP = 0.1
 PREFERENCE_MIN = -1.0
 PREFERENCE_MAX = 1.0
+DEFAULT_RELEVANCE = 0.05
 
 EXPLOITATION_COUNT = int(os.getenv("EXPLOITATION_COUNT", "4"))
 EXPLORATION_COUNT = int(os.getenv("EXPLORATION_COUNT", "1"))
@@ -238,7 +239,7 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
             scored_posts = []
             for post in unseen_posts:
                 post_tags = [tag["name"] for tag in post.get("tags", [])]
-                relevance = sum(preference_vector.get(tag, 0) for tag in post_tags)
+                relevance = DEFAULT_RELEVANCE + sum(preference_vector.get(tag, 0) for tag in post_tags)
                 scored_posts.append((relevance, post))
 
             scored_posts.sort(key=lambda x: (-x[0], x[1]["id"]))
@@ -279,7 +280,6 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
             for post in recommended:
                 await _record_shown_post(session, user_id, post["id"], batch_number)
 
-    # Add author_login and like/dislike flags to each recommended post
     feedback_by_post_id = {}
     if user_id and recommended:
         async with aiohttp.ClientSession() as feedback_session:
@@ -423,7 +423,6 @@ async def set_favorite_tags(
             user_data = await user_resp.json()
             preference_vector = user_data.get("preference_vector", {}) or {}
 
-        # Get all tags and build id -> name mapping
         all_tags = []
         offset = 0
         limit = 100
@@ -441,12 +440,10 @@ async def set_favorite_tags(
 
         tag_id_to_name = {tag["id"]: tag["name"] for tag in all_tags}
 
-        # Validate requested tag IDs
         for tag_id in request.tag_ids:
             if tag_id not in tag_id_to_name:
                 raise HTTPException(status_code=400, detail=f"Tag with id={tag_id} not found")
 
-        # Boost selected tags, leave others unchanged
         for tag_id in request.tag_ids:
             tag_name = tag_id_to_name[tag_id]
             current = preference_vector.get(tag_name, 0)
@@ -454,7 +451,6 @@ async def set_favorite_tags(
             new_weight = max(PREFERENCE_MIN, min(PREFERENCE_MAX, new_weight))
             preference_vector[tag_name] = round(new_weight, 2)
 
-        # Clean up zeros
         preference_vector = {k: v for k, v in preference_vector.items() if abs(v) > 1e-9}
 
         async with session.patch(
