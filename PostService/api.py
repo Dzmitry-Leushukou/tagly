@@ -222,7 +222,9 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
                 except (TypeError, ValueError):
                     continue
 
-        if not user_id or not preference_vector or not any(v != 0 for v in preference_vector.values()):
+        has_positive = preference_vector and any(v > 0 for v in preference_vector.values())
+        
+        if not user_id or not preference_vector or not has_positive:
             available_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
             random.shuffle(available_posts)
             total_count = EXPLOITATION_COUNT + EXPLORATION_COUNT
@@ -232,7 +234,7 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
             if not preference_vector:
                 logger.info(f"Recommendations (no preference vector): exploitation=0, exploration={exploration_count}")
             else:
-                logger.info(f"Recommendations (unauthorized): exploitation=0, exploration={exploration_count}")
+                logger.info(f"Recommendations (no positive weights): exploitation=0, exploration={exploration_count}")
         else:
             unseen_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
 
@@ -244,36 +246,44 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
 
             scored_posts.sort(key=lambda x: (-x[0], x[1]["id"]))
 
-            exploitation_posts = [post for _, post in scored_posts[:EXPLOITATION_COUNT]]
-            exploitation_post_ids = {p["id"] for p in exploitation_posts}
+            max_relevance = scored_posts[0][0] if scored_posts else 0
+            if max_relevance <= 0:
+                random.shuffle(unseen_posts)
+                recommended = unseen_posts[:EXPLOITATION_COUNT + EXPLORATION_COUNT]
+                exploitation_count = 0
+                exploration_count = len(recommended)
+                logger.info(f"Recommendations (no positive relevance): exploitation=0, exploration={exploration_count}")
+            else:
+                exploitation_posts = [post for _, post in scored_posts[:EXPLOITATION_COUNT]]
+                exploitation_post_ids = {p["id"] for p in exploitation_posts}
 
-            remaining_posts = [p for p in unseen_posts if p["id"] not in exploitation_post_ids]
-            random.shuffle(remaining_posts)
-            exploration_posts = remaining_posts[:EXPLORATION_COUNT]
+                remaining_posts = [p for p in unseen_posts if p["id"] not in exploitation_post_ids]
+                random.shuffle(remaining_posts)
+                exploration_posts = remaining_posts[:EXPLORATION_COUNT]
 
-            if len(exploitation_posts) < EXPLOITATION_COUNT:
-                needed = EXPLOITATION_COUNT - len(exploitation_posts)
-                available_for_fill = [p for p in remaining_posts if p["id"] not in [ep["id"] for ep in exploration_posts]]
-                random.shuffle(available_for_fill)
-                additional = available_for_fill[:needed]
-                exploitation_posts.extend(additional)
-                exploration_posts = [p for p in exploration_posts if p["id"] not in [p2["id"] for p2 in additional]]
+                if len(exploitation_posts) < EXPLOITATION_COUNT:
+                    needed = EXPLOITATION_COUNT - len(exploitation_posts)
+                    available_for_fill = [p for p in remaining_posts if p["id"] not in [ep["id"] for ep in exploration_posts]]
+                    random.shuffle(available_for_fill)
+                    additional = available_for_fill[:needed]
+                    exploitation_posts.extend(additional)
+                    exploration_posts = [p for p in exploration_posts if p["id"] not in [p2["id"] for p2 in additional]]
 
-            if len(exploration_posts) < EXPLORATION_COUNT:
-                needed = EXPLORATION_COUNT - len(exploration_posts)
-                taken_ids = {p["id"] for p in exploitation_posts} | {p["id"] for p in exploration_posts}
-                remaining_for_explore = [p for p in unseen_posts if p["id"] not in taken_ids]
-                random.shuffle(remaining_for_explore)
-                exploration_posts.extend(remaining_for_explore[:needed])
+                if len(exploration_posts) < EXPLORATION_COUNT:
+                    needed = EXPLORATION_COUNT - len(exploration_posts)
+                    taken_ids = {p["id"] for p in exploitation_posts} | {p["id"] for p in exploration_posts}
+                    remaining_for_explore = [p for p in unseen_posts if p["id"] not in taken_ids]
+                    random.shuffle(remaining_for_explore)
+                    exploration_posts.extend(remaining_for_explore[:needed])
 
-            recommended = exploitation_posts + exploration_posts
+                recommended = exploitation_posts + exploration_posts
 
-            if SHUFFLE_RESULTS:
-                random.shuffle(recommended)
+                if SHUFFLE_RESULTS:
+                    random.shuffle(recommended)
 
-            exploitation_count = len(exploitation_posts)
-            exploration_count = len(exploration_posts)
-            logger.info(f"Recommendations: exploitation={exploitation_count}, exploration={exploration_count}")
+                exploitation_count = len(exploitation_posts)
+                exploration_count = len(exploration_posts)
+                logger.info(f"Recommendations: exploitation={exploitation_count}, exploration={exploration_count}")
 
         if user_id:
             batch_number = await _get_next_batch_number(session, user_id)
