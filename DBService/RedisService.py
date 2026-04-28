@@ -41,3 +41,11 @@ class RedisService:
     def get(self, key):
         value = self.redis.get(key)
         return json.loads(value) if value else None
+
+    def delete(self, key):
+        try:
+            deleted = self.redis.delete(key)
+            logger.info(f"Deleted key {key} from Redis (deleted: {deleted})")
+        except Exception as e:
+            logger.error(f"Failed to delete key {key} from Redis: {e}")
+            raise

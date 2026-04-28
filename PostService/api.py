@@ -228,7 +228,10 @@ async def get_recommendations(user_login: str | None = Depends(get_optional_user
             recommended = available_posts[:total_count]
             exploitation_count = 0
             exploration_count = len(recommended)
-            logger.info(f"Recommendations (unauthorized): exploitation=0, exploration={exploration_count}")
+            if not preference_vector:
+                logger.info(f"Recommendations (no preference vector): exploitation=0, exploration={exploration_count}")
+            else:
+                logger.info(f"Recommendations (unauthorized): exploitation=0, exploration={exploration_count}")
         else:
             unseen_posts = [p for p in all_posts if p["id"] not in shown_post_ids]
 
@@ -393,6 +396,7 @@ async def submit_feedback(
         ) as patch_resp:
             if patch_resp.status != 200:
                 raise HTTPException(status_code=500, detail="Failed to update preference vector")
+            logger.info(f"Updated preference_vector for {user_login}: {preference_vector}")
 
         async with session.post(
             f"{DB_SERVICE_URL}/user_feedback",
