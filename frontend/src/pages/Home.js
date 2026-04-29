@@ -115,45 +115,72 @@ function Home() {
     }
   };
 
-  const handleLike = async (postId) => {
-    const currentPost = posts.find(p => p.id === postId);
-    if (!currentPost) return;
+const handleLike = async (postId) => {
+  const currentPost = posts.find(p => p.id === postId);
+  if (!currentPost) return;
+  
+  // Оптимистичное обновление
+  setPosts(prev => prev.map(p => 
+    p.id === postId ? { ...p, user_liked: true, user_disliked: false } : p
+  ));
+  
+  try {
+    await postsAPI.sendFeedback(postId, 'like');
     
-    const newLiked = !currentPost.user_liked;
-    
-    setPosts(posts.map(p => 
-      p.id === postId ? { ...p, user_liked: newLiked, user_disliked: false } : p
-    ));
-    
-    try {
-      await postsAPI.sendFeedback(postId, 'like');
-    } catch (error) {
-      console.error('Like error:', error);
-      setPosts(posts.map(p => 
-        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
-      ));
+    const userId = await getUserId();
+    if (userId) {
+      const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
+      if (feedbackRes.ok) {
+        const feedback = await feedbackRes.json();
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { 
+            ...p, 
+            user_liked: feedback.feedback_type === 'like',
+            user_disliked: feedback.feedback_type === 'dislike'
+          } : p
+        ));
+      }
     }
-  };
+  } catch (error) {
+    console.error('Like error:', error);
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+    ));
+  }
+};
 
-  const handleDislike = async (postId) => {
-    const currentPost = posts.find(p => p.id === postId);
-    if (!currentPost) return;
+const handleDislike = async (postId) => {
+  const currentPost = posts.find(p => p.id === postId);
+  if (!currentPost) return;
+  
+  setPosts(prev => prev.map(p => 
+    p.id === postId ? { ...p, user_liked: false, user_disliked: true } : p
+  ));
+  
+  try {
+    await postsAPI.sendFeedback(postId, 'dislike');
     
-    const newDisliked = !currentPost.user_disliked;
-    
-    setPosts(posts.map(p => 
-      p.id === postId ? { ...p, user_liked: false, user_disliked: newDisliked } : p
-    ));
-    
-    try {
-      await postsAPI.sendFeedback(postId, 'dislike');
-    } catch (error) {
-      console.error('Dislike error:', error);
-      setPosts(posts.map(p => 
-        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
-      ));
+    const userId = await getUserId();
+    if (userId) {
+      const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
+      if (feedbackRes.ok) {
+        const feedback = await feedbackRes.json();
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { 
+            ...p, 
+            user_liked: feedback.feedback_type === 'like',
+            user_disliked: feedback.feedback_type === 'dislike'
+          } : p
+        ));
+      }
     }
-  };
+  } catch (error) {
+    console.error('Dislike error:', error);
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+    ));
+  }
+};
 
   const toggleReadMore = (postId) => {
     setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
@@ -179,7 +206,7 @@ function Home() {
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
-            <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
+            {/* <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button> */}
             <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>

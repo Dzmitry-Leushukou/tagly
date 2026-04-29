@@ -24,7 +24,7 @@ function Profile() {
       
       setUserPosts(postsWithoutLikes);
     } catch (error) {
-      console.error('Error loading user posts:', error);
+      console.error('Errrrror loading user posts:', error);
       setUserPosts([]);
     } finally {
       setLoading(false);
@@ -62,7 +62,7 @@ function Profile() {
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
-            <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
+            {/* <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button> */}
             <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>

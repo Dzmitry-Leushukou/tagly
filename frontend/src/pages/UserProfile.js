@@ -9,19 +9,48 @@ function UserProfile() {
   const [expandedPosts, setExpandedPosts] = useState({});
   const navigate = useNavigate();
 
+  const getUserId = async () => {
+    const currentLogin = localStorage.getItem('login');
+    if (!currentLogin) return null;
+    try {
+      const userRes = await fetch(`http://localhost:8001/user/${currentLogin}`);
+      const user = await userRes.json();
+      return user.id;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const loadFeedbackForPosts = async (postsList, userId) => {
+    if (!userId) return postsList.map(p => ({ ...p, user_liked: false, user_disliked: false }));
+    
+    const postsWithFeedback = await Promise.all(postsList.map(async (post) => {
+      try {
+        const res = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
+        if (res.ok) {
+          const feedback = await res.json();
+          return {
+            ...post,
+            user_liked: feedback.feedback_type === 'like',
+            user_disliked: feedback.feedback_type === 'dislike'
+          };
+        }
+      } catch (e) {}
+      return { ...post, user_liked: false, user_disliked: false };
+    }));
+    return postsWithFeedback;
+  };
+
   const loadUserPosts = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await postsAPI.getUserPostsByLogin(login, 50, 0);
       let postsData = response.data.posts || [];
       
-      const savedReactions = JSON.parse(localStorage.getItem('user_reactions') || '{}');
-      const postsWithReactions = postsData.map(post => ({
-        ...post,
-        user_liked: savedReactions[post.id] === 'like',
-        user_disliked: savedReactions[post.id] === 'dislike'
-      }));
+      const userId = await getUserId();
+      const postsWithFeedback = await loadFeedbackForPosts(postsData, userId);
       
-      setPosts(postsWithReactions);
+      setPosts(postsWithFeedback);
     } catch (error) {
       console.error('Error loading user posts:', error);
     } finally {
@@ -33,51 +62,70 @@ function UserProfile() {
     loadUserPosts();
   }, [loadUserPosts]);
 
-  const updateReaction = (postId, reactionType) => {
-    const savedReactions = JSON.parse(localStorage.getItem('user_reactions') || '{}');
-    
-    if (reactionType === null) {
-      delete savedReactions[postId];
-    } else {
-      savedReactions[postId] = reactionType;
-    }
-    localStorage.setItem('user_reactions', JSON.stringify(savedReactions));
-    
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          user_liked: reactionType === 'like',
-          user_disliked: reactionType === 'dislike'
-        };
-      }
-      return post;
-    }));
-  };
-
   const handleLike = async (postId) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
+    const currentPost = posts.find(p => p.id === postId);
+    if (!currentPost) return;
     
-    if (post.user_liked) {
-      updateReaction(postId, null);
-      await postsAPI.sendFeedback(postId, 'like').catch(e => console.error(e));
-    } else {
-      updateReaction(postId, 'like');
-      await postsAPI.sendFeedback(postId, 'like').catch(e => console.error(e));
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, user_liked: !p.user_liked, user_disliked: false } : p
+    ));
+    
+    try {
+      await postsAPI.sendFeedback(postId, 'like');
+      
+      const userId = await getUserId();
+      if (userId) {
+        const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
+        if (feedbackRes.ok) {
+          const feedback = await feedbackRes.json();
+          setPosts(prev => prev.map(p => 
+            p.id === postId ? { 
+              ...p, 
+              user_liked: feedback.feedback_type === 'like',
+              user_disliked: feedback.feedback_type === 'dislike'
+            } : p
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Like error:', error);
+    
+      setPosts(prev => prev.map(p => 
+        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+      ));
     }
   };
 
   const handleDislike = async (postId) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
+    const currentPost = posts.find(p => p.id === postId);
+    if (!currentPost) return;
     
-    if (post.user_disliked) {
-      updateReaction(postId, null);
-      await postsAPI.sendFeedback(postId, 'dislike').catch(e => console.error(e));
-    } else {
-      updateReaction(postId, 'dislike');
-      await postsAPI.sendFeedback(postId, 'dislike').catch(e => console.error(e));
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, user_liked: false, user_disliked: !p.user_disliked } : p
+    ));
+    
+    try {
+      await postsAPI.sendFeedback(postId, 'dislike');
+      
+      const userId = await getUserId();
+      if (userId) {
+        const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
+        if (feedbackRes.ok) {
+          const feedback = await feedbackRes.json();
+          setPosts(prev => prev.map(p => 
+            p.id === postId ? { 
+              ...p, 
+              user_liked: feedback.feedback_type === 'like',
+              user_disliked: feedback.feedback_type === 'dislike'
+            } : p
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Dislike error:', error);
+      setPosts(prev => prev.map(p => 
+        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+      ));
     }
   };
 
@@ -109,7 +157,7 @@ function UserProfile() {
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
-            <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button>
+            {/* <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button> */}
             <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>
