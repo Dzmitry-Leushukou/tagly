@@ -75,7 +75,6 @@ function TagSelection() {
         }
       }
       
-      // Сортируем по алфавиту
       const sortedTags = [...allFetchedTags].sort((a, b) => 
         a.name.localeCompare(b.name, 'ru')
       );

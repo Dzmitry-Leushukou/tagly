@@ -8,7 +8,7 @@ function Profile() {
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const navigate = useNavigate();
-
+  const [isSubmitting, setIsSubmitting] = useState(false); 
   const username = localStorage.getItem('login') || 'user';
 
   const loadUserPosts = useCallback(async () => {
@@ -35,17 +35,24 @@ function Profile() {
     loadUserPosts();
   }, [loadUserPosts]);
 
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
-    try {
-      await postsAPI.createPost(newPostContent);
-      setNewPostContent('');
-      setShowCreateModal(false);
-      loadUserPosts();
-    } catch (error) {
-      alert('Error creating post');
-    }
-  };
+ 
+const handleCreatePost = async () => {
+  if (!newPostContent.trim()) return;
+  if (isSubmitting) return; 
+  
+  setIsSubmitting(true);
+  try {
+    await postsAPI.createPost(newPostContent);
+    setNewPostContent('');
+    setShowCreateModal(false);
+    await loadUserPosts(); 
+  } catch (error) {
+    console.error('Error creating post:', error);
+    alert('Error creating post');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const getAvatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=92A9E0&color=fff&size=200&bold=true&length=2`;
@@ -75,7 +82,7 @@ function Profile() {
               <img src={getAvatarUrl(username)} alt="Profile" style={styles.avatarImage} />
             </div>
             <div style={styles.profileInfo}>
-              <p style={styles.profileUsername}>@{username}</p>
+              <p style={styles.profileUsername}>{username}</p>
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
                   <span style={styles.statNumber}>{userPosts.length}</span>
@@ -101,7 +108,7 @@ function Profile() {
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img src={getAvatarUrl(post.author_login || username)} alt="Avatar" style={styles.postAvatar} />
-                  <span style={styles.postAuthor}>@{post.author_login || username}</span>
+                  <span style={styles.postAuthor}>{post.author_login || username}</span>
                 </div>
               </div>
               <p style={styles.postContent}>{post.content}</p>
@@ -131,7 +138,7 @@ function Profile() {
             <textarea placeholder="What's on your mind?" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} style={styles.modalTextarea} rows="6" autoFocus />
             <div style={styles.modalActions}>
               <button onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancel</button>
-              <button onClick={handleCreatePost} style={styles.submitPostBtn}>Post</button>
+              <button   onClick={handleCreatePost}   style={styles.submitPostBtn}  disabled={isSubmitting} >  {isSubmitting ? 'Posting...' : 'Post'}</button>
             </div>
           </div>
         </div>

@@ -62,72 +62,54 @@ function UserProfile() {
     loadUserPosts();
   }, [loadUserPosts]);
 
-  const handleLike = async (postId) => {
-    const currentPost = posts.find(p => p.id === postId);
-    if (!currentPost) return;
-    
-    setPosts(prev => prev.map(p => 
-      p.id === postId ? { ...p, user_liked: !p.user_liked, user_disliked: false } : p
-    ));
-    
-    try {
+ const handleLike = async (postId) => {
+  const currentPost = posts.find(p => p.id === postId);
+  if (!currentPost) return;
+  if (currentPost.user_liked) return;
+  
+  setPosts(prev => prev.map(p => 
+    p.id === postId ? { ...p, user_liked: true, user_disliked: false } : p
+  ));
+  
+  try {
+    if (currentPost.user_disliked) {
       await postsAPI.sendFeedback(postId, 'like');
-      
-      const userId = await getUserId();
-      if (userId) {
-        const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
-        if (feedbackRes.ok) {
-          const feedback = await feedbackRes.json();
-          setPosts(prev => prev.map(p => 
-            p.id === postId ? { 
-              ...p, 
-              user_liked: feedback.feedback_type === 'like',
-              user_disliked: feedback.feedback_type === 'dislike'
-            } : p
-          ));
-        }
-      }
-    } catch (error) {
-      console.error('Like error:', error);
-    
-      setPosts(prev => prev.map(p => 
-        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
-      ));
+      await postsAPI.sendFeedback(postId, 'like');
+    } else {
+      await postsAPI.sendFeedback(postId, 'like');
     }
-  };
-
-  const handleDislike = async (postId) => {
-    const currentPost = posts.find(p => p.id === postId);
-    if (!currentPost) return;
-    
+  } catch (error) {
+    console.error('Like error:', error);
     setPosts(prev => prev.map(p => 
-      p.id === postId ? { ...p, user_liked: false, user_disliked: !p.user_disliked } : p
+      p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
     ));
-    
-    try {
+  }
+};
+
+const handleDislike = async (postId) => {
+  const currentPost = posts.find(p => p.id === postId);
+  if (!currentPost) return;
+  
+  if (currentPost.user_disliked) return;
+  
+  setPosts(prev => prev.map(p => 
+    p.id === postId ? { ...p, user_liked: false, user_disliked: true } : p
+  ));
+  
+  try {
+    if (currentPost.user_liked) {
       await postsAPI.sendFeedback(postId, 'dislike');
-      
-      const userId = await getUserId();
-      if (userId) {
-        const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
-        if (feedbackRes.ok) {
-          const feedback = await feedbackRes.json();
-          setPosts(prev => prev.map(p => 
-            p.id === postId ? { 
-              ...p, 
-              user_liked: feedback.feedback_type === 'like',
-              user_disliked: feedback.feedback_type === 'dislike'
-            } : p
-          ));
-        }
-      }
-    } catch (error) {
-      console.error('Dislike error:', error);
-      setPosts(prev => prev.map(p => 
-        p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
-      ));
+      await postsAPI.sendFeedback(postId, 'dislike');
+    } else {
+      await postsAPI.sendFeedback(postId, 'dislike');
     }
-  };
+  } catch (error) {
+    console.error('Dislike error:', error);
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, user_liked: currentPost.user_liked, user_disliked: currentPost.user_disliked } : p
+    ));
+  }
+};
 
   const toggleReadMore = (postId) => {
     setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
@@ -157,7 +139,6 @@ function UserProfile() {
           <div style={styles.navLinks}>
             <button onClick={() => navigate('/')} style={styles.navLink}>Home</button>
             <button onClick={() => navigate('/profile')} style={styles.navLink}>Profile</button>
-            {/* <button onClick={() => navigate('/tag-selection')} style={styles.navLink}>Edit Tags</button> */}
             <button onClick={() => { localStorage.clear(); navigate('/login'); }} style={styles.navLink}>Logout</button>
           </div>
         </div>
@@ -170,13 +151,12 @@ function UserProfile() {
               <img src={getAvatarUrl(login)} alt="Profile" style={styles.avatarImage} />
             </div>
             <div style={styles.profileInfo}>
-              <p style={styles.profileUsername}>@{login}</p>
+              <p style={styles.profileUsername}>{login}</p>
               <div style={styles.profileStats}>
                 <div style={styles.statItem}>
                   <span style={styles.statNumber}>{posts.length}</span>
                   <span style={styles.statLabel}>posts</span>
                 </div>
-                
               </div>
             </div>
           </div>
@@ -188,7 +168,7 @@ function UserProfile() {
               <div style={styles.postHeader}>
                 <div style={styles.postAuthorInfo}>
                   <img src={getAvatarUrl(post.author_login || login)} alt="Avatar" style={styles.postAvatar} />
-                  <span style={styles.postAuthor}>@{post.author_login || login}</span>
+                  <span style={styles.postAuthor}>{post.author_login || login}</span>
                 </div>
               </div>
               <p style={styles.postContent}>{getTruncatedContent(post.content, post.id)}</p>
@@ -287,45 +267,6 @@ const styles = {
     height: '58px',
     objectFit: 'contain',
   },
-  searchContainer: {
-    position: 'relative',
-    flex: 1,
-    maxWidth: '585px',
-  },
-  searchInput: {
-    width: '100%',
-    height: '70px',
-    padding: '0 29px',
-    border: '2px solid #9EABC3',
-    borderRadius: '39px',
-    fontSize: '27px',
-    fontFamily: "'IM Fell French Canon', serif",
-    color: '#304069',
-    background: 'white',
-    outline: 'none',
-  },
-  searchResults: {
-    position: 'absolute',
-    top: '78px',
-    left: 0,
-    right: 0,
-    background: 'white',
-    border: '2px solid #9EABC3',
-    borderRadius: '23px',
-    maxHeight: '487px',
-    overflowY: 'auto',
-    zIndex: 1001,
-  },
-  searchResultItem: {
-    padding: '19px 23px',
-    borderBottom: '1px solid #eee',
-    cursor: 'pointer',
-  },
-  searchResultContent: {
-    fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '21px',
-    color: '#304069',
-  },
   navLinks: {
     display: 'flex',
     gap: '39px',
@@ -370,13 +311,6 @@ const styles = {
   },
   profileInfo: {
     flex: 1,
-  },
-  profileName: {
-    fontFamily: "'IM Fell French Canon', serif",
-    fontSize: '47px',
-    color: '#304069',
-    margin: 0,
-    marginBottom: '10px',
   },
   profileUsername: {
     fontFamily: "'IM Fell French Canon', serif",

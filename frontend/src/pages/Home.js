@@ -11,41 +11,10 @@ function Home() {
   const [expandedPosts, setExpandedPosts] = useState({});
   const loadingRef = useRef(false);
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false); 
 
   const getAvatarUrl = (login) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(login || 'user')}&background=92A9E0&color=fff&size=80&bold=true&length=2`;
-  };
-
-  const getUserId = async () => {
-    const login = localStorage.getItem('login');
-    if (!login) return null;
-    try {
-      const userRes = await fetch(`http://localhost:8001/user/${login}`);
-      const user = await userRes.json();
-      return user.id;
-    } catch (e) {
-      return null;
-    }
-  };
-
-  const loadFeedbackForPosts = async (postsList, userId) => {
-    if (!userId) return postsList.map(p => ({ ...p, user_liked: false, user_disliked: false }));
-    
-    const postsWithFeedback = await Promise.all(postsList.map(async (post) => {
-      try {
-        const res = await fetch(`http://localhost:8001/user_feedback/${userId}/${post.id}`);
-        if (res.ok) {
-          const feedback = await res.json();
-          return {
-            ...post,
-            user_liked: feedback.feedback_type === 'like',
-            user_disliked: feedback.feedback_type === 'dislike'
-          };
-        }
-      } catch (e) {}
-      return { ...post, user_liked: false, user_disliked: false };
-    }));
-    return postsWithFeedback;
   };
 
   const loadPosts = useCallback(async () => {
@@ -64,10 +33,7 @@ function Home() {
         return;
       }
       
-      const userId = await getUserId();
-      const postsWithFeedback = await loadFeedbackForPosts(newPosts, userId);
-      
-      setPosts(prev => [...prev, ...postsWithFeedback]);
+      setPosts(prev => [...prev, ...newPosts]);
       
       if (newPosts.length < 5) {
         setHasMore(false);
@@ -103,44 +69,39 @@ function Home() {
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
     try {
       await postsAPI.createPost(newPostContent);
       setNewPostContent('');
       setShowCreateModal(false);
       setPosts([]);
       setHasMore(true);
-      loadPosts();
+      await loadPosts(); 
     } catch (error) {
+      console.error('Error creating post:', error);
       alert('Error creating post');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-const handleLike = async (postId) => {
+  const handleLike = async (postId) => {
   const currentPost = posts.find(p => p.id === postId);
   if (!currentPost) return;
   
-  // Оптимистичное обновление
+  if (currentPost.user_liked) return;
+  
   setPosts(prev => prev.map(p => 
     p.id === postId ? { ...p, user_liked: true, user_disliked: false } : p
   ));
   
   try {
-    await postsAPI.sendFeedback(postId, 'like');
-    
-    const userId = await getUserId();
-    if (userId) {
-      const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
-      if (feedbackRes.ok) {
-        const feedback = await feedbackRes.json();
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { 
-            ...p, 
-            user_liked: feedback.feedback_type === 'like',
-            user_disliked: feedback.feedback_type === 'dislike'
-          } : p
-        ));
-      }
+    if (currentPost.user_disliked) {
+      await postsAPI.sendFeedback(postId, 'like');
     }
+    await postsAPI.sendFeedback(postId, 'like');
   } catch (error) {
     console.error('Like error:', error);
     setPosts(prev => prev.map(p => 
@@ -153,27 +114,18 @@ const handleDislike = async (postId) => {
   const currentPost = posts.find(p => p.id === postId);
   if (!currentPost) return;
   
+  if (currentPost.user_disliked) return;
+  
   setPosts(prev => prev.map(p => 
     p.id === postId ? { ...p, user_liked: false, user_disliked: true } : p
   ));
   
   try {
-    await postsAPI.sendFeedback(postId, 'dislike');
-    
-    const userId = await getUserId();
-    if (userId) {
-      const feedbackRes = await fetch(`http://localhost:8001/user_feedback/${userId}/${postId}`);
-      if (feedbackRes.ok) {
-        const feedback = await feedbackRes.json();
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { 
-            ...p, 
-            user_liked: feedback.feedback_type === 'like',
-            user_disliked: feedback.feedback_type === 'dislike'
-          } : p
-        ));
-      }
+   
+    if (currentPost.user_liked) {
+      await postsAPI.sendFeedback(postId, 'dislike');
     }
+    await postsAPI.sendFeedback(postId, 'dislike');
   } catch (error) {
     console.error('Dislike error:', error);
     setPosts(prev => prev.map(p => 
@@ -279,7 +231,7 @@ const handleDislike = async (postId) => {
             <textarea placeholder="What's on your mind?" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} style={styles.modalTextarea} rows="6" autoFocus />
             <div style={styles.modalActions}>
               <button onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancel</button>
-              <button onClick={handleCreatePost} style={styles.submitPostBtn}>Post</button>
+              <button   onClick={handleCreatePost}   style={styles.submitPostBtn}  disabled={isSubmitting}>  {isSubmitting ? 'Posting...' : 'Post'}</button>
             </div>
           </div>
         </div>
